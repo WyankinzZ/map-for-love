@@ -114,6 +114,11 @@ export default function MemoryArchive() {
   const [expandedCities, setExpandedCities] = useState<Set<string>>(new Set());
   const [lightboxPhotos, setLightboxPhotos] = useState<LightboxPhoto[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [view, moodFilter, searchQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -305,6 +310,15 @@ export default function MemoryArchive() {
             </div>
           </div>
 
+          {(() => {
+            const activeGroupLength = view === "city" ? cityGroups.length : timelineGroups.length;
+            const totalPages = Math.max(1, Math.ceil(activeGroupLength / 3));
+            const paginatedCityGroups = cityGroups.slice((currentPage - 1) * 3, currentPage * 3);
+            const paginatedTimelineGroups = timelineGroups.slice((currentPage - 1) * 3, currentPage * 3);
+
+            return (
+              <>
+
           {memoryItems.length === 0 ? (
             <div className="mt-12 grid min-h-[420px] place-items-center rounded-[8px] border border-dashed border-[#D8DDD8] bg-[#FAFBF7]/58 px-6 py-14 text-center shadow-[0_14px_34px_rgba(90,102,112,0.045)] backdrop-blur">
               <div className="max-w-[430px]">
@@ -345,7 +359,7 @@ export default function MemoryArchive() {
             </div>
           ) : view === "city" ? (
             <div className="mt-10 space-y-9">
-              {cityGroups.map((group) => {
+              {paginatedCityGroups.map((group) => {
                 const expanded = expandedCities.has(group.cityId);
                 const visibleMemories = expanded ? group.memories : group.memories.slice(0, 3);
 
@@ -387,7 +401,7 @@ export default function MemoryArchive() {
           ) : (
             <div className="relative mt-10 space-y-8 pl-9">
               <div className="absolute bottom-0 left-3 top-0 w-px bg-[#E8B8C2]/58" aria-hidden="true" />
-              {timelineGroups.map((group) => (
+              {paginatedTimelineGroups.map((group) => (
                 <section key={group.label} className="relative">
                   <span className="absolute -left-[34px] top-1 grid h-6 w-6 place-items-center rounded-full border border-[#F5DCE0] bg-[#FAFBF7]">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#E8B8C2]" />
@@ -406,6 +420,33 @@ export default function MemoryArchive() {
               ))}
             </div>
           )}
+
+          {totalPages > 1 && memoryItems.length > 0 && (
+            <div className="mt-12 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="rounded-[6px] border border-[#D8DDD8] px-3 py-1.5 text-sm text-[#5A6670]/70 transition hover:bg-[#FAFBF7] disabled:opacity-30"
+              >
+                上一页
+              </button>
+              <span className="px-3 text-sm font-medium text-[#5A6670]/60">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-[6px] border border-[#D8DDD8] px-3 py-1.5 text-sm text-[#5A6670]/70 transition hover:bg-[#FAFBF7] disabled:opacity-30"
+              >
+                下一页
+              </button>
+            </div>
+          )}
+          </>
+        );
+      })()}
       {lightboxPhotos.length > 0 && (
         <Lightbox
           photos={lightboxPhotos}

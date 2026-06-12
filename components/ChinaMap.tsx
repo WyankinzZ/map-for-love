@@ -79,14 +79,25 @@ export function SouthChinaSeaInset() {
         />
         <text
           x={inset.width / 2}
-          y={inset.height - 5}
+          y={inset.height - 18}
           textAnchor="middle"
           fontSize="9"
           fontWeight="600"
           fill={colors.ink}
           fillOpacity="0.6"
         >
-          南海诸岛
+          南海诸岛十段线
+        </text>
+        <text
+          x={inset.width / 2}
+          y={inset.height - 5}
+          textAnchor="middle"
+          fontSize="7"
+          fontWeight="500"
+          fill={colors.ink}
+          fillOpacity="0.4"
+        >
+          审图号: GS(2023)2767号
         </text>
       </svg>
     </div>
