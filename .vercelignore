@@ -1,0 +1,10 @@
+.DS_Store
+.claude/
+.next/
+.vercel/
+archive/
+awesome-design-md/
+data/*.private.json
+data/*.backup-*
+node_modules/
+tsconfig.tsbuildinfo

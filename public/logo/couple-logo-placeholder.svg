@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1106 849" role="img" aria-label="情侣头像 logo 占位">
+  <!-- Neutral placeholder for the couple avatar logo. Users replace it from
+       the in-app settings page; it ships with no personal imagery. -->
+  <g fill="none">
+    <!-- soft heart above the pair -->
+    <path
+      d="M553 286c-26-46-104-44-104 12 0 44 64 80 104 104 40-24 104-60 104-104 0-56-78-58-104-12z"
+      fill="#F5DCE0" stroke="#E8B8C2" stroke-width="6" />
+    <!-- left avatar -->
+    <circle cx="430" cy="452" r="118" fill="#A8C8DC" />
+    <circle cx="430" cy="452" r="118" fill="#FAFBF7" opacity="0.18" />
+    <path d="M286 760a144 144 0 0 1 288 0z" fill="#A8C8DC" />
+    <!-- right avatar -->
+    <circle cx="676" cy="452" r="118" fill="#E8B8C2" />
+    <circle cx="676" cy="452" r="118" fill="#FAFBF7" opacity="0.18" />
+    <path d="M532 760a144 144 0 0 1 288 0z" fill="#E8B8C2" />
+  </g>
+</svg>
