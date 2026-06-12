@@ -1,3 +1,14 @@
+export type MemoryMood = 'happy' | 'romantic' | 'sweet' | 'sad' | 'surprised' | 'calm';
+
+export const moodConfig: Record<MemoryMood, { emoji: string; label: string; color: string }> = {
+  happy: { emoji: '😁', label: '开心', color: '#FFD37A' },
+  romantic: { emoji: '🌹', label: '浪漫', color: '#E83F6F' },
+  sweet: { emoji: '🥰', label: '甜蜜', color: '#F5DCE0' }, // This was the default map lit color
+  sad: { emoji: '🥲', label: '悲伤', color: '#A8C8DC' },
+  surprised: { emoji: '🤩', label: '惊喜', color: '#D6A6B0' },
+  calm: { emoji: '😌', label: '平静', color: '#D6E8F0' },
+};
+
 export interface Memory {
   id: string;
   cityId: string;
@@ -9,6 +20,7 @@ export interface Memory {
   text: string;
   createdAt?: string;
   draft?: boolean;
+  mood?: MemoryMood;
 }
 
 export const memories: Memory[] = [];

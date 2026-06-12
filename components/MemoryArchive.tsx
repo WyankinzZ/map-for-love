@@ -14,6 +14,8 @@ import {
   recentTimelineMemories,
   sortMemoriesByTime,
   type Memory,
+  type MemoryMood,
+  moodConfig,
 } from "@/data/memories";
 import {
   memoryStoreUpdatedEvent,
@@ -70,7 +72,14 @@ function MemoryCard({ item, compact = false }: Readonly<{ item: MemoryItem; comp
         </div>
         <div className="min-w-0 py-1">
           <div className="flex items-baseline gap-2">
-            <h3 className="truncate text-lg font-semibold text-[#5A6670]">{memory.city}</h3>
+            <h3 className="truncate text-lg font-semibold text-[#5A6670]">
+              {memory.city}
+              {memory.mood && moodConfig[memory.mood] && (
+                <span className="ml-1 text-[14px] leading-none" title={moodConfig[memory.mood].label}>
+                  {moodConfig[memory.mood].emoji}
+                </span>
+              )}
+            </h3>
             <span className="shrink-0 text-sm text-[#5A6670]/46">{memory.date}</span>
           </div>
           <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#5A6670]/70">{memory.text}</p>
@@ -87,6 +96,7 @@ function MemoryCard({ item, compact = false }: Readonly<{ item: MemoryItem; comp
 export default function MemoryArchive() {
   const [localMemories, setLocalMemories] = useState<LocalMemoryStore>({});
   const [view, setView] = useState<ArchiveView>("city");
+  const [moodFilter, setMoodFilter] = useState<MemoryMood | "all">("all");
   const [expandedCities, setExpandedCities] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -124,11 +134,13 @@ export default function MemoryArchive() {
       if (!memory.draft) byId.set(memory.id, memory);
     });
 
-    return sortMemoriesByTime([...byId.values()]).map((memory) => ({
-      memory,
-      city: cities.find((city) => city.id === memory.cityId),
-    }));
-  }, [localMemories]);
+    return sortMemoriesByTime([...byId.values()])
+      .filter((memory) => moodFilter === "all" || memory.mood === moodFilter)
+      .map((memory) => ({
+        memory,
+        city: cities.find((city) => city.id === memory.cityId),
+      }));
+  }, [localMemories, moodFilter]);
 
   const cityGroups = useMemo(() => {
     const groups = new Map<string, MemoryItem[]>();
@@ -203,6 +215,36 @@ export default function MemoryArchive() {
               </div>
             </div>
           </header>
+
+          <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-[#D8DDD8]/50 pb-6">
+            <span className="text-sm font-semibold text-[#5A6670]/70 mr-2">心情筛选：</span>
+            <button
+              type="button"
+              onClick={() => setMoodFilter("all")}
+              className={`rounded-[6px] px-3 py-1.5 text-xs font-semibold transition ${
+                moodFilter === "all"
+                  ? "bg-[#E8B8C2] text-white"
+                  : "bg-[#FAFBF7] text-[#5A6670]/70 hover:bg-[#F5DCE0]/50"
+              }`}
+            >
+              全部
+            </button>
+            {(Object.entries(moodConfig) as [MemoryMood, { emoji: string; label: string }][]).map(([key, info]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMoodFilter(key)}
+                className={`flex items-center gap-1.5 rounded-[6px] px-3 py-1.5 text-xs font-semibold transition ${
+                  moodFilter === key
+                    ? "bg-[#E8B8C2] text-white"
+                    : "bg-[#FAFBF7] text-[#5A6670]/70 hover:bg-[#F5DCE0]/50"
+                }`}
+              >
+                <span>{info.emoji}</span>
+                <span>{info.label}</span>
+              </button>
+            ))}
+          </div>
 
           {memoryItems.length === 0 ? (
             <div className="mt-12 grid min-h-[420px] place-items-center rounded-[8px] border border-dashed border-[#D8DDD8] bg-[#FAFBF7]/58 px-6 py-14 text-center shadow-[0_14px_34px_rgba(90,102,112,0.045)] backdrop-blur">

@@ -2,7 +2,7 @@
   "name": "map",
   "version": "0.1.1",
   "description": "Local-first couple memory map desktop app",
-  "author": "Map of Us",
+  "author": "Map For Everyone",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3002",
@@ -21,7 +21,7 @@
   "main": "electron/main.js",
   "build": {
     "appId": "com.mapofus.desktop",
-    "productName": "Map of Us",
+    "productName": "Map For Everyone",
     "directories": {
       "output": "dist"
     },

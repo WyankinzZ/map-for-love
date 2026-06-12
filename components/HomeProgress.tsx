@@ -2,15 +2,15 @@
 
 import { useEffect, useMemo, useState, type ReactNode, type SVGProps } from "react";
 import Link from "next/link";
-import { CalendarDays, Heart, Images, RefreshCw } from "lucide-react";
+import { CalendarDays, Heart, Images, RefreshCw, PlaneTakeoff } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { LocalPrivacyImage } from "@/components/LocalPrivacyImage";
 import { cities } from "@/data/cities";
 import {
   getLitCityIds,
   getLitProvinceIds,
-  memoryStoreUpdatedEvent,
-  type LocalMemoryStore,
 } from "@/data/progress";
+import { useMemories } from "@/hooks/useMemories";
 import { TOTAL_PROVINCES } from "@/data/provinces";
 import {
   appSettingsUpdatedEvent,
@@ -88,7 +88,11 @@ const daysTogether = (date?: string) => {
   start.setHours(0, 0, 0, 0);
   today.setHours(0, 0, 0, 0);
 
-  return Math.max(0, Math.floor((today.getTime() - start.getTime()) / 86_400_000));
+  const diff = Math.floor((today.getTime() - start.getTime()) / 86_400_000);
+  return {
+    days: Math.abs(diff),
+    isFuture: diff < 0
+  };
 };
 
 const formatClock = (value: Date) =>
@@ -390,24 +394,69 @@ function DateTimeCard() {
 }
 
 function TogetherDaysCard() {
+  const [anniversaries, setAnniversaries] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const settings = useAppSettings();
-  const startDate = settings.anniversaryDate ?? defaultAnniversaryDate;
-  const label = settings.anniversaryLabel ?? defaultAnniversaryLabel;
-  const days = daysTogether(startDate);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      import("@/components/memory/Shared").then(({ readItems, configs }) => {
+        if (cancelled) return;
+        const items = readItems(configs.anniversary.storageKey);
+        setAnniversaries(items);
+      });
+    };
+    load();
+    const handleStorage = () => load();
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (anniversaries.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % anniversaries.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [anniversaries.length]);
+
+  const activeItem = anniversaries.length > 0 ? anniversaries[currentIndex] : null;
+
+  const startDate = activeItem?.date || settings.anniversaryDate || defaultAnniversaryDate;
+  const label = activeItem?.title || settings.anniversaryLabel || defaultAnniversaryLabel;
+  const daysInfo = daysTogether(startDate);
 
   return (
     <div className="mt-3 rounded-[8px] border border-[#D8DDD8]/70 bg-[#FAFBF7]/62 px-4 py-3 text-[#5A6670] shadow-[0_10px_24px_rgba(90,102,112,0.05)]">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold text-[#5A6670]/58">纪念日</p>
-          <p className="mt-1 text-sm font-semibold text-[#5A6670]">{label}</p>
-        </div>
-        <div className="flex items-end gap-1.5">
-          <span className="text-2xl font-semibold leading-none text-[#E8B8C2]">{days}</span>
-          <span className="pb-0.5 text-sm font-semibold text-[#5A6670]/56">天</span>
-        </div>
-      </div>
-      <p className="mt-1 truncate text-xs text-[#5A6670]/45">从 {startDate} 开始</p>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${label}-${startDate}`}
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -5 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-[#5A6670]/58">纪念日</p>
+              <p className="mt-1 truncate text-sm font-semibold text-[#5A6670]">{label}</p>
+            </div>
+            <div className="flex shrink-0 items-end gap-1.5">
+              <span className="text-2xl font-semibold leading-none text-[#E8B8C2]">
+                {daysInfo?.days ?? '--'}
+              </span>
+              <span className="pb-0.5 text-sm font-semibold text-[#5A6670]/56">天</span>
+            </div>
+          </div>
+          <p className="mt-1 truncate text-xs text-[#5A6670]/45">
+            {daysInfo?.isFuture ? `距离 ${startDate} 还有` : `从 ${startDate} 开始`}
+          </p>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
@@ -441,7 +490,7 @@ function AlbumProgressCard() {
         <div className="mb-3 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#5A6670]">我们的进度</p>
-            <p className="mt-0.5 text-xs text-[#5A6670]/52">Map of Us</p>
+            <p className="mt-0.5 text-xs text-[#5A6670]/52">Map For Everyone</p>
           </div>
           <Heart className="h-5 w-5 fill-[#F5DCE0] text-[#E8B8C2]" />
         </div>
@@ -502,13 +551,12 @@ function CoupleLogo() {
           alt="我们的拼图头像 logo"
           fill
           sizes="208px"
-          className={`object-contain transition-transform duration-300 ease-out ${
-            activeHead === "left"
+          className={`object-contain transition-transform duration-300 ease-out ${activeHead === "left"
               ? "scale-[1.08] origin-[33%_47%]"
               : activeHead === "right"
                 ? "scale-[1.08] origin-[69%_45%]"
                 : "scale-100"
-          }`}
+            }`}
         />
         <button
           className="absolute left-[15%] top-[23%] h-[42%] w-[31%] rounded-full outline-none transition hover:scale-[1.04] focus-visible:ring-2 focus-visible:ring-[#A8C8DC]/70 active:scale-[1.08]"
@@ -528,44 +576,17 @@ function CoupleLogo() {
 }
 
 function useProgress() {
-  const [localMemories, setLocalMemories] = useState<LocalMemoryStore>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    const handleMemoryUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<LocalMemoryStore>).detail;
-      if (detail) setLocalMemories(detail);
-    };
-
-    async function loadLocalMemories() {
-      const response = await fetch("/api/memories", { cache: "no-store" }).catch(() => null);
-      if (!response?.ok) return;
-
-      const data = (await response.json().catch(() => null)) as
-        | { memories?: LocalMemoryStore }
-        | null;
-
-      if (!cancelled && data?.memories) setLocalMemories(data.memories);
-    }
-
-    window.addEventListener(memoryStoreUpdatedEvent, handleMemoryUpdate);
-    loadLocalMemories();
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener(memoryStoreUpdatedEvent, handleMemoryUpdate);
-    };
-  }, []);
+  const memories = useMemories();
 
   return useMemo(() => {
-    const litCityIds = getLitCityIds(localMemories);
+    const litCityIds = getLitCityIds(memories);
     const litProvinceIds = getLitProvinceIds(litCityIds);
 
     return {
       cityCount: litCityIds.size,
       provinceCount: litProvinceIds.size,
     };
-  }, [localMemories]);
+  }, [memories]);
 }
 
 export function ProgressBadge() {
@@ -595,6 +616,83 @@ export function LegendProgress() {
   );
 }
 
+function TripCountdownCard() {
+  const [trips, setTrips] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      import("@/components/memory/Shared").then(({ readItems, configs }) => {
+        if (cancelled) return;
+        const items = readItems(configs.trip.storageKey);
+        // Only show future trips
+        const futureTrips = items.filter(item => {
+          if (!item.date) return false;
+          const info = daysTogether(item.date);
+          return info?.isFuture;
+        });
+        setTrips(futureTrips);
+      });
+    };
+    load();
+    const handleStorage = () => load();
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (trips.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % trips.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [trips.length]);
+
+  if (trips.length === 0) return null;
+
+  const activeItem = trips[currentIndex];
+  const startDate = activeItem.date;
+  const label = activeItem.title;
+  const daysInfo = daysTogether(startDate);
+
+  return (
+    <div className="mt-3 rounded-[8px] border border-[#D8DDD8]/70 bg-[#FAFBF7]/62 px-4 py-3 text-[#5A6670] shadow-[0_10px_24px_rgba(90,102,112,0.05)]">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${label}-${startDate}`}
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -5 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-[#5A6670]/58">
+                <PlaneTakeoff className="h-3 w-3" />
+                旅行倒数
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-[#5A6670]">{label}</p>
+            </div>
+            <div className="flex shrink-0 items-end gap-1.5">
+              <span className="text-2xl font-semibold leading-none text-[#A8C8DC]">
+                {daysInfo?.days ?? '--'}
+              </span>
+              <span className="pb-0.5 text-sm font-semibold text-[#5A6670]/56">天</span>
+            </div>
+          </div>
+          <p className="mt-1 truncate text-xs text-[#5A6670]/45">
+            距离 {startDate} 出发还有
+          </p>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function StatsPanel({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <aside className="hidden h-full w-[310px] shrink-0 flex-col overflow-y-auto border-l border-dashed border-[#D8DDD8] px-7 py-7 lg:flex">
@@ -602,6 +700,7 @@ export function StatsPanel({ children }: Readonly<{ children: ReactNode }>) {
       <WeatherCard />
       {children}
       <TogetherDaysCard />
+      <TripCountdownCard />
       <AlbumProgressCard />
       <CoupleLogo />
     </aside>
@@ -615,41 +714,14 @@ export function ProvinceProgressBadge({
   provinceId: string;
   total: number;
 }>) {
-  const [localMemories, setLocalMemories] = useState<LocalMemoryStore>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    const handleMemoryUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<LocalMemoryStore>).detail;
-      if (detail) setLocalMemories(detail);
-    };
-
-    async function loadLocalMemories() {
-      const response = await fetch("/api/memories", { cache: "no-store" }).catch(() => null);
-      if (!response?.ok) return;
-
-      const data = (await response.json().catch(() => null)) as
-        | { memories?: LocalMemoryStore }
-        | null;
-
-      if (!cancelled && data?.memories) setLocalMemories(data.memories);
-    }
-
-    window.addEventListener(memoryStoreUpdatedEvent, handleMemoryUpdate);
-    loadLocalMemories();
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener(memoryStoreUpdatedEvent, handleMemoryUpdate);
-    };
-  }, []);
+  const memories = useMemories();
 
   const count = useMemo(() => {
-    const litCityIds = getLitCityIds(localMemories);
+    const litCityIds = getLitCityIds(memories);
 
     return cities.filter((city) => city.provinceId === provinceId && litCityIds.has(city.id))
       .length;
-  }, [localMemories, provinceId]);
+  }, [memories, provinceId]);
 
   return (
     <div className="hidden items-center gap-2 rounded-[8px] border border-[#D8DDD8]/90 bg-[#FAFBF7]/70 px-4 py-2.5 text-sm text-[#5A6670]/76 shadow-[0_8px_24px_rgba(90,102,112,0.08)] backdrop-blur sm:flex">

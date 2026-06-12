@@ -1,132 +1,31 @@
 "use client";
-
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  ImagePlus,
-  Maximize2,
-  Minimize2,
-  Minus,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Trash2,
-  X,
-} from "lucide-react";
-import { chinaFeatures, makePath, makeProjectionForProvince, provinceIdOf } from "@/lib/geo";
-import { cityFallbackSprite, getCitiesByProvince, type City } from "@/data/cities";
-import { getLatestMemory, sortMemoriesByTime, type Memory } from "@/data/memories";
-import { getLitCityIds, memoryStoreUpdatedEvent, type LocalMemoryStore } from "@/data/progress";
-import { adminModeUpdatedEvent, readAdminMode } from "@/data/adminMode";
+import { motion } from "framer-motion";
+import { Minus, Plus, RotateCcw } from "lucide-react";
+import { type City, getCitiesByProvince, cityFallbackSprite } from "@/data/cities";
+import { type Memory, getLatestMemory, moodConfig, sortMemoriesByTime } from "@/data/memories";
+import { type LocalMemoryStore, getLitCityIds, memoryStoreUpdatedEvent } from "@/data/progress";
+import { writeAdminMode } from "@/data/adminMode";
 import type { Province } from "@/data/provinces";
+import { useAdminMode } from "@/hooks/useAdminMode";
+import { makeProjectionForProvince, makePath, chinaFeatures, provinceIdOf } from "@/lib/geo";
+import { 
+  type MapCamera, type DragState, type CityAssetStore, type CardAnchor,
+  colors, spring, memoryCardWidth, memoryCardGap, memoryCardMaxHeight, cityListPanelWidth,
+  revokeObjectUrl, clampZoom, stableCoordinate
+} from "./province/Shared";
+import CityPanel from "./province/CityPanel";
+import { MemoryImage } from "./province/MemoryImage";
 import { LocalPrivacyImage, LocalPrivacyImg } from "@/components/LocalPrivacyImage";
+
 
 interface ProvinceMapProps {
   province: Province;
   width?: number;
   height?: number;
 }
-
 type BrowserTimeout = ReturnType<Window["setTimeout"]>;
-type PhotoDraft = {
-  previewUrl: string;
-  dataUrl: string | null;
-  name: string;
-};
-type CardAnchor = {
-  x: number;
-  y: number;
-  side: "left" | "right";
-};
-type MapCamera = {
-  scale: number;
-  x: number;
-  y: number;
-};
-type DragState = {
-  pointerId: number;
-  startClientX: number;
-  startClientY: number;
-  startCamera: MapCamera;
-};
-type MemoryPanelTab = "memory" | "gallery" | "history";
-type CityAssetStore = Record<string, string>;
-
-const colors = {
-  cream: "#FAFBF7",
-  dim: "#D8DDD8",
-  ink: "#5A6670",
-  sakura: "#F5DCE0",
-  bloom: "#E8B8C2",
-  mist: "#D6E8F0",
-  sky: "#A8C8DC",
-};
-
-const spring = { type: "spring" as const, stiffness: 100, damping: 20 };
-const memoryTextMaxLength = 80;
-const maxPhotosPerMemory = 24;
-const memoryPhotoMaxDimension = 900;
-const memoryPhotoQuality = 0.52;
-const landmarkPhotoMaxDimension = 1280;
-const landmarkPhotoQuality = 0.76;
-const memoryCardWidth = 292;
-const memoryCardGap = 26;
-const memoryCardMaxHeight = 620;
-const cityListPanelWidth = 250;
-
-const isObjectUrl = (url?: string | null): url is string =>
-  typeof url === "string" && url.startsWith("blob:");
-
-const revokeObjectUrl = (url?: string | null) => {
-  if (isObjectUrl(url)) URL.revokeObjectURL(url);
-};
-
-const isDataImageUrl = (url?: string | null): url is string =>
-  typeof url === "string" && url.startsWith("data:image/");
-
-const isBrowserImageUrl = (url?: string | null): url is string =>
-  typeof url === "string" && (url.startsWith("data:image/") || url.startsWith("https://"));
-
-const useAdminMode = () => {
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setIsAdmin(readAdminMode()), 0);
-    const handleAdminMode = (event: Event) => {
-      setIsAdmin(Boolean((event as CustomEvent<boolean>).detail));
-    };
-
-    window.addEventListener(adminModeUpdatedEvent, handleAdminMode);
-
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener(adminModeUpdatedEvent, handleAdminMode);
-    };
-  }, []);
-
-  return isAdmin;
-};
-
-const normalizeMemoryDate = (value: string) => {
-  const match = value.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);
-  if (!match) return null;
-
-  const [, rawYear, rawMonth, rawDay] = match;
-  const year = Number(rawYear);
-  const month = Number(rawMonth);
-  const day = Number(rawDay);
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  const isValid =
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day;
-
-  if (!isValid) return null;
-
-  return `${rawYear}.${String(month).padStart(2, "0")}.${String(day).padStart(2, "0")}`;
-};
 
 const markerLayoutByCity: Record<
   string,
@@ -260,93 +159,9 @@ const getMarkerLayout = (city: City, selected: boolean) => {
   return markerLayoutByCity[city.id] ?? defaultMarkerLayout;
 };
 
-const stableCoordinate = (value: number) => Number(value.toFixed(3));
 
-const clampZoom = (value: number) => Math.min(Math.max(value, 1), 2.4);
 
-const readBlobAsDataUrl = (blob: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
 
-    reader.addEventListener("load", () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Image read failed"));
-    });
-    reader.addEventListener("error", () => reject(reader.error ?? new Error("Image read failed")));
-    reader.readAsDataURL(blob);
-  });
-
-const readFileAsDataUrl = (file: File) => readBlobAsDataUrl(file);
-
-const loadImageFile = (file: File) =>
-  new Promise<HTMLImageElement>((resolve, reject) => {
-    const imageUrl = URL.createObjectURL(file);
-    const image = new window.Image();
-
-    image.addEventListener(
-      "load",
-      () => {
-        URL.revokeObjectURL(imageUrl);
-        resolve(image);
-      },
-      { once: true },
-    );
-    image.addEventListener(
-      "error",
-      () => {
-        URL.revokeObjectURL(imageUrl);
-        reject(new Error("Image load failed"));
-      },
-      { once: true },
-    );
-    image.src = imageUrl;
-  });
-
-async function readCompressedImageDataUrl(
-  file: File,
-  {
-    maxDimension,
-    quality,
-  }: Readonly<{
-    maxDimension: number;
-    quality: number;
-  }>,
-) {
-  if (file.type === "image/svg+xml") return readFileAsDataUrl(file);
-
-  const image = await loadImageFile(file);
-  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext("2d");
-  if (!context) return readFileAsDataUrl(file);
-
-  context.fillStyle = "#FAFBF7";
-  context.fillRect(0, 0, width, height);
-  context.drawImage(image, 0, 0, width, height);
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", quality);
-  });
-
-  if (!blob) return readFileAsDataUrl(file);
-
-  return readBlobAsDataUrl(blob);
-}
-
-const revokePhotoDrafts = (photos: PhotoDraft[]) => {
-  photos.forEach((photo) => revokeObjectUrl(photo.previewUrl));
-};
-
-const photosOfMemory = (memory?: Memory) => {
-  if (!memory) return [];
-
-  return memory.photos?.length ? memory.photos : [memory.image];
-};
 
 export default function ProvinceMap({ province, width = 1120, height = 760 }: ProvinceMapProps) {
   const isAdmin = useAdminMode();
@@ -527,6 +342,10 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
       body: JSON.stringify({ memory }),
     });
 
+    if (response.status === 401 || response.status === 403) {
+      writeAdminMode(false);
+      throw new Error("Admin session expired");
+    }
     if (!response.ok) throw new Error("Failed to save memory");
 
     const data = (await response.json()) as { memory: Memory; memories: LocalMemoryStore };
@@ -548,6 +367,10 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
       body: JSON.stringify({ cityId, memoryId, coverImage }),
     });
 
+    if (response.status === 401 || response.status === 403) {
+      writeAdminMode(false);
+      throw new Error("Admin session expired");
+    }
     if (!response.ok) throw new Error("Failed to update memory cover");
 
     const data = (await response.json()) as { memory: Memory; memories: LocalMemoryStore };
@@ -569,6 +392,10 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
       body: JSON.stringify({ cityId, memoryId, memory }),
     });
 
+    if (response.status === 401 || response.status === 403) {
+      writeAdminMode(false);
+      throw new Error("Admin session expired");
+    }
     if (!response.ok) throw new Error("Failed to update memory");
 
     const data = (await response.json()) as { memory: Memory; memories: LocalMemoryStore };
@@ -590,46 +417,15 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
       body: JSON.stringify({ cityId, memoryId }),
     });
 
+    if (response.status === 401 || response.status === 403) {
+      writeAdminMode(false);
+      throw new Error("Admin session expired");
+    }
     if (!response.ok) throw new Error("Failed to delete memory");
 
     const data = (await response.json()) as { memories: LocalMemoryStore };
-
-    setLocalMemories(() => {
-      localMemoriesRef.current = data.memories;
-
-      return data.memories;
-    });
-    window.dispatchEvent(new CustomEvent(memoryStoreUpdatedEvent, { detail: data.memories }));
-  };
-
-  const handleSaveCityAsset = async (cityId: string, image: string) => {
-    if (!isAdmin) throw new Error("Admin mode required");
-
-    const response = await fetch("/api/city-assets", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cityId, image }),
-    });
-
-    if (!response.ok) throw new Error("Failed to save city asset");
-
-    const data = (await response.json()) as { assets: CityAssetStore };
-    setCityAssets(data.assets);
-  };
-
-  const handleDeleteCityAsset = async (cityId: string) => {
-    if (!isAdmin) throw new Error("Admin mode required");
-
-    const response = await fetch("/api/city-assets", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cityId }),
-    });
-
-    if (!response.ok) throw new Error("Failed to delete city asset");
-
-    const data = (await response.json()) as { assets: CityAssetStore };
-    setCityAssets(data.assets);
+    setLocalMemories(data.memories);
+    window.dispatchEvent(new CustomEvent(memoryStoreUpdatedEvent));
   };
 
   const focusCity = (city: Pick<City, "id" | "lng" | "lat">) => {
@@ -706,7 +502,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
   };
 
   const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
+    // Note: wheel events in React are passive, so preventDefault is ignored.
     const delta = event.deltaY < 0 ? 1.12 : 0.88;
     zoomAt(event.clientX, event.clientY, delta);
   };
@@ -907,6 +703,8 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
           {cityList.map((city) => {
             const lit = litCityIds.has(city.id);
             const selected = city.id === selectedCityId;
+            const latestMemory = localMemories[city.id] ? sortMemoriesByTime(localMemories[city.id])[0] : undefined;
+            const moodConfigInfo = latestMemory?.mood ? moodConfig[latestMemory.mood] : undefined;
 
             return (
               <button
@@ -920,11 +718,15 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
                 onClick={() => handleSelectCity(city.id, lit)}
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <span
-                    className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#FAFBF7] ${
-                      lit ? "bg-[#E8B8C2] shadow-[0_0_10px_rgba(232,184,194,0.55)]" : "bg-[#D8DDD8]"
-                    }`}
-                  />
+                  {moodConfigInfo ? (
+                    <span className="text-[14px] leading-none">{moodConfigInfo.emoji}</span>
+                  ) : (
+                    <span
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#FAFBF7] ${
+                        lit ? "bg-[#E8B8C2] shadow-[0_0_10px_rgba(232,184,194,0.55)]" : "bg-[#D8DDD8]"
+                      }`}
+                    />
+                  )}
                   <span className="truncate font-semibold">{city.name}</span>
                 </span>
                 <span className={`shrink-0 text-[11px] ${lit ? "text-[#E8B8C2]/80" : "text-[#5A6670]/40"}`}>
@@ -937,7 +739,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
       </aside>
 
       {selectedCity && (
-        <MemoryCard
+        <CityPanel
           key={selectedCity.id}
           city={selectedCity}
           localMemories={localMemories[selectedCity.id] ?? []}
@@ -950,14 +752,13 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
         onUpdate={handleUpdateMemory}
         onDelete={handleDeleteMemory}
         landmarkImage={cityAssets[selectedCity.id] ?? selectedCity.sprite}
-        hasCustomLandmark={Boolean(cityAssets[selectedCity.id])}
-        onSaveLandmark={handleSaveCityAsset}
-        onDeleteLandmark={handleDeleteCityAsset}
       />
       )}
     </div>
   );
 }
+
+
 
 function CityMarker({ city, lit, selected }: Readonly<{ city: City; lit: boolean; selected: boolean }>) {
   const isFallbackCity = city.sprite === cityFallbackSprite;
@@ -1043,794 +844,7 @@ function CityMarker({ city, lit, selected }: Readonly<{ city: City; lit: boolean
   );
 }
 
-function MemoryCard({
-  city,
-  localMemories,
-  isLit,
-  anchor,
-  isAdmin,
-  onClose,
-  onSave,
-  onSetCover,
-  onUpdate,
-  onDelete,
-  landmarkImage,
-  hasCustomLandmark,
-  onSaveLandmark,
-  onDeleteLandmark,
-}: Readonly<{
-  city: City;
-  localMemories: Memory[];
-  isLit: boolean;
-  anchor: CardAnchor | null;
-  isAdmin: boolean;
-  onClose: () => void;
-  onSave: (cityId: string, memory: Memory) => Promise<void>;
-  onSetCover: (cityId: string, memoryId: string, coverImage: string) => Promise<void>;
-  onUpdate: (cityId: string, memoryId: string, memory: Memory) => Promise<void>;
-  onDelete: (cityId: string, memoryId: string) => Promise<void>;
-  landmarkImage: string;
-  hasCustomLandmark: boolean;
-  onSaveLandmark: (cityId: string, image: string) => Promise<void>;
-  onDeleteLandmark: (cityId: string) => Promise<void>;
-}>) {
-  const defaultMemory = isLit ? getLatestMemory(city.id) : undefined;
-  const memories = sortMemoriesByTime(
-    [
-      ...localMemories,
-      ...(defaultMemory && !localMemories.some((item) => item.id === defaultMemory.id)
-        ? [defaultMemory]
-        : []),
-    ],
-  );
-  const memory = memories[0];
-  const memoryPhotos = photosOfMemory(memory);
-  const galleryPhotos = Array.from(new Set(memories.flatMap((item) => photosOfMemory(item))));
-  const localMemoryIds = useMemo(
-    () => new Set(localMemories.map((item) => item.id)),
-    [localMemories],
-  );
-  const [formOpen, setFormOpen] = useState(!isLit && isAdmin);
-  const [date, setDate] = useState("");
-  const [text, setText] = useState("");
-  const [photoDrafts, setPhotoDrafts] = useState<PhotoDraft[]>([]);
-  const [photoError, setPhotoError] = useState("");
-  const [saveError, setSaveError] = useState("");
-  const [coverError, setCoverError] = useState("");
-  const [settingCover, setSettingCover] = useState("");
-  const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
-  const [deletingMemoryId, setDeletingMemoryId] = useState("");
-  const [deleteError, setDeleteError] = useState("");
-  const [landmarkError, setLandmarkError] = useState("");
-  const [landmarkSaving, setLandmarkSaving] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<MemoryPanelTab>("memory");
-  const [isReadingPhoto, setIsReadingPhoto] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const photoDraftsRef = useRef<PhotoDraft[]>([]);
-  const photoReadTokenRef = useRef(0);
-  const mountedRef = useRef(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const landmarkInputRef = useRef<HTMLInputElement>(null);
 
-  const trimmedDate = date.trim();
-  const trimmedText = text.trim();
-  const normalizedDate = normalizeMemoryDate(trimmedDate);
-  const dateInvalid = trimmedDate.length > 0 && !normalizedDate;
-  const canSave =
-    isAdmin &&
-    Boolean(normalizedDate) &&
-    trimmedText.length > 0 &&
-    !isReadingPhoto &&
-    !photoError &&
-    !isSaving;
-  const isEditing = Boolean(editingMemory);
-  const showMemory = !expanded || activeTab === "memory";
-  const showGallery = expanded && activeTab === "gallery";
-  const showHistory = (!expanded || activeTab === "history") && memories.length > 0;
-
-  const resetForm = (revokePhoto: boolean) => {
-    photoReadTokenRef.current += 1;
-    setDate("");
-    setText("");
-    setPhotoError("");
-    setSaveError("");
-    setCoverError("");
-    setDeleteError("");
-    setIsReadingPhoto(false);
-    setEditingMemory(null);
-    if (revokePhoto) revokePhotoDrafts(photoDraftsRef.current);
-    photoDraftsRef.current = [];
-    setPhotoDrafts([]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const startEdit = (record: Memory) => {
-    if (!isAdmin) return;
-
-    photoReadTokenRef.current += 1;
-    revokePhotoDrafts(photoDraftsRef.current);
-    photoDraftsRef.current = [];
-    setPhotoDrafts([]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setDate(record.date);
-    setText(record.text);
-    setPhotoError("");
-    setSaveError("");
-    setCoverError("");
-    setDeleteError("");
-    setEditingMemory(record);
-    setFormOpen(true);
-    setActiveTab("memory");
-  };
-
-  const handleDelete = async (record: Memory) => {
-    if (!isAdmin) {
-      setDeleteError("请先进入管理员模式");
-      return;
-    }
-
-    if (deletingMemoryId) return;
-    const confirmed = window.confirm(`确定删除 ${record.city} ${record.date} 的这条回忆吗？`);
-    if (!confirmed) return;
-
-    setDeletingMemoryId(record.id);
-    setDeleteError("");
-
-    try {
-      await onDelete(city.id, record.id);
-      if (editingMemory?.id === record.id) resetForm(true);
-    } catch {
-      setDeleteError("删除失败，请稍后再试");
-    } finally {
-      if (mountedRef.current) setDeletingMemoryId("");
-    }
-  };
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-      photoReadTokenRef.current += 1;
-      revokePhotoDrafts(photoDraftsRef.current);
-    };
-  }, []);
-
-  const handlePickFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isAdmin) {
-      event.target.value = "";
-      setPhotoError("请先进入管理员模式");
-      return;
-    }
-
-    const files = Array.from(event.target.files ?? [])
-      .filter((file) => file.type.startsWith("image/"))
-      .slice(0, maxPhotosPerMemory);
-    if (files.length === 0) return;
-
-    const readToken = photoReadTokenRef.current + 1;
-    photoReadTokenRef.current = readToken;
-    revokePhotoDrafts(photoDraftsRef.current);
-    const nextPhotoDrafts = files.map((file) => ({
-      previewUrl: URL.createObjectURL(file),
-      dataUrl: null,
-      name: file.name,
-    }));
-
-    photoDraftsRef.current = nextPhotoDrafts;
-    setPhotoDrafts(nextPhotoDrafts);
-    setPhotoError("");
-    setSaveError("");
-    setIsReadingPhoto(true);
-
-    try {
-      const dataUrls = await Promise.all(
-        files.map((file) =>
-          readCompressedImageDataUrl(file, {
-            maxDimension: memoryPhotoMaxDimension,
-            quality: memoryPhotoQuality,
-          }),
-        ),
-      );
-      if (!mountedRef.current || photoReadTokenRef.current !== readToken) return;
-      const nextReadyDrafts = nextPhotoDrafts.map((photo, index) => ({
-        ...photo,
-        dataUrl: dataUrls[index],
-      }));
-      photoDraftsRef.current = nextReadyDrafts;
-      setPhotoDrafts(nextReadyDrafts);
-    } catch {
-      if (!mountedRef.current || photoReadTokenRef.current !== readToken) return;
-      setPhotoError("图片读取失败，请重新选择");
-    } finally {
-      if (mountedRef.current && photoReadTokenRef.current === readToken) setIsReadingPhoto(false);
-    }
-  };
-
-  const handlePickLandmark = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!isAdmin) {
-      if (landmarkInputRef.current) landmarkInputRef.current.value = "";
-      setLandmarkError("请先进入管理员模式");
-      return;
-    }
-    if (!file || !file.type.startsWith("image/") || landmarkSaving) return;
-
-    setLandmarkSaving(true);
-    setLandmarkError("");
-
-    try {
-      await onSaveLandmark(
-        city.id,
-        await readCompressedImageDataUrl(file, {
-          maxDimension: landmarkPhotoMaxDimension,
-          quality: landmarkPhotoQuality,
-        }),
-      );
-    } catch {
-      setLandmarkError("地标图片保存失败，请重新选择");
-    } finally {
-      if (mountedRef.current) setLandmarkSaving(false);
-      if (landmarkInputRef.current) landmarkInputRef.current.value = "";
-    }
-  };
-
-  const handleDeleteLandmark = async () => {
-    if (!isAdmin) {
-      setLandmarkError("请先进入管理员模式");
-      return;
-    }
-
-    if (!hasCustomLandmark || landmarkSaving) return;
-    const confirmed = window.confirm(`确定删除 ${city.name} 的自定义地标图吗？`);
-    if (!confirmed) return;
-
-    setLandmarkSaving(true);
-    setLandmarkError("");
-
-    try {
-      await onDeleteLandmark(city.id);
-    } catch {
-      setLandmarkError("地标图片删除失败，请稍后再试");
-    } finally {
-      if (mountedRef.current) setLandmarkSaving(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!isAdmin) {
-      setSaveError("请先进入管理员模式");
-      return;
-    }
-    if (!canSave) return;
-    if (!normalizedDate) return;
-    setIsSaving(true);
-    setSaveError("");
-
-    try {
-      const photos = photoDrafts.map((photo) => photo.dataUrl).filter((photo): photo is string => Boolean(photo));
-
-      const nextPhotos = photos.length > 0 ? photos : editingMemory?.photos ?? [editingMemory?.image ?? landmarkImage];
-      const nextMemory = {
-        id: editingMemory?.id ?? `${city.id}-local`,
-        cityId: city.id,
-        city: city.name,
-        cityEn: city.nameEn,
-        date: normalizedDate,
-        image: editingMemory && photos.length === 0 ? editingMemory.image : nextPhotos[0],
-        photos: nextPhotos,
-        text: trimmedText,
-        createdAt: editingMemory?.createdAt,
-      };
-
-      if (editingMemory) await onUpdate(city.id, editingMemory.id, nextMemory);
-      else await onSave(city.id, {
-        id: `${city.id}-local`,
-        cityId: city.id,
-        city: city.name,
-        cityEn: city.nameEn,
-        date: normalizedDate,
-        image: photos[0] ?? landmarkImage,
-        photos: photos.length > 0 ? photos : [landmarkImage],
-        text: trimmedText,
-      });
-      resetForm(true);
-      setFormOpen(false);
-    } catch {
-      setSaveError("保存失败，请稍后再试");
-    } finally {
-      if (mountedRef.current) setIsSaving(false);
-    }
-  };
-
-  const handleSetCover = async (photo: string) => {
-    if (!isAdmin) {
-      setCoverError("请先进入管理员模式");
-      return;
-    }
-
-    if (!memory || memory.image === photo || settingCover) return;
-    setSettingCover(photo);
-    setCoverError("");
-
-    try {
-      await onSetCover(city.id, memory.id, photo);
-    } catch {
-      setCoverError("封面保存失败，请稍后再试");
-    } finally {
-      if (mountedRef.current) setSettingCover("");
-    }
-  };
-
-  return (
-    <motion.article
-      className={`absolute z-50 overflow-y-auto rounded-[8px] border border-[#D8DDD8] bg-[#FAFBF7]/94 text-[#5A6670] shadow-[0_18px_42px_rgba(90,102,112,0.18)] backdrop-blur ${
-        expanded
-          ? "max-h-[min(720px,calc(100vh-92px))] w-[390px] p-6"
-          : "max-h-[min(620px,calc(100vh-110px))] w-[292px] p-5"
-      }`}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-      onPointerMove={(event) => event.stopPropagation()}
-      onWheel={(event) => event.stopPropagation()}
-      initial={{ opacity: 0, y: 16, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={spring}
-      style={
-        expanded
-          ? { right: 0, top: 12 }
-          : {
-              left: anchor ? anchor.x : 24,
-              top: anchor ? anchor.y : "50%",
-            }
-      }
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <span className={`h-3 w-3 rounded-sm ${isLit ? "bg-[#E8B8C2]" : "bg-[#D8DDD8]"}`} />
-            {city.name}
-            <span className="text-sm font-normal text-[#5A6670]/62">{city.nameEn}</span>
-          </h2>
-          <p className="mt-3 text-sm text-[#5A6670]/76">
-            {memory?.date ?? "添加回忆后点亮"}
-          </p>
-          {!isAdmin && (
-            <p className="mt-2 text-xs font-semibold text-[#5A6670]/42">管理员锁定，无法修改回忆</p>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            className="grid h-8 w-8 place-items-center rounded-[6px] text-[#5A6670]/62 transition hover:bg-[#D6E8F0]/32 hover:text-[#A8C8DC]"
-            onClick={() => setExpanded((value) => !value)}
-            aria-label={expanded ? "收起城市记录面板" : "展开城市记录面板"}
-            type="button"
-          >
-            {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-          <button
-            className="grid h-8 w-8 place-items-center rounded-[6px] text-[#5A6670]/62 transition hover:bg-[#D8DDD8]/28 hover:text-[#5A6670]"
-            onClick={onClose}
-            aria-label="关闭回忆卡片"
-            type="button"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="mt-4 flex rounded-[8px] border border-[#D8DDD8]/72 bg-[#FAFBF7]/72 p-1 text-xs font-semibold text-[#5A6670]/58">
-          {([
-            ["memory", "回忆"],
-            ["gallery", "相册"],
-            ["history", "历史"],
-          ] as const).map(([tab, label]) => (
-            <button
-              key={tab}
-              className={`flex-1 rounded-[7px] px-3 py-2 text-center transition ${
-                activeTab === tab ? "bg-[#F5DCE0] text-[#E8B8C2]" : "hover:bg-[#D6E8F0]/30"
-              }`}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {showMemory && (
-        <>
-          <div className="mt-4 rounded-[7px] border border-[#D8DDD8]/72 bg-[#FAFBF7]/72 p-3">
-            <div className="flex items-center gap-3">
-              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[6px] border border-[#D8DDD8] bg-[#D6E8F0]">
-                <MemoryImage src={landmarkImage} alt={`${city.name} 地标图`} dim={!isLit} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-[#5A6670]/72">地图地标图</p>
-                <p className="mt-1 text-[11px] leading-4 text-[#5A6670]/46">
-                  上传后会显示在省份地图里，不需要先点亮城市。
-                </p>
-              </div>
-            </div>
-            <input
-              ref={landmarkInputRef}
-              className="hidden"
-              type="file"
-              accept="image/*"
-              onChange={handlePickLandmark}
-              disabled={!isAdmin}
-            />
-            <div className="mt-3 flex gap-2">
-              <button
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-[6px] border border-[#A8C8DC] px-3 py-2 text-xs font-semibold text-[#A8C8DC] transition hover:bg-[#D6E8F0]/34 disabled:opacity-45"
-                type="button"
-                onClick={() => landmarkInputRef.current?.click()}
-                disabled={landmarkSaving || !isAdmin}
-              >
-                <ImagePlus className="h-3.5 w-3.5" />
-                {hasCustomLandmark ? "替换地标" : "上传地标"}
-              </button>
-              {hasCustomLandmark && (
-                <button
-                  className="grid h-8 w-8 place-items-center rounded-[6px] border border-[#F5DCE0] text-[#E8B8C2] transition hover:bg-[#F5DCE0]/45 disabled:opacity-45"
-                  type="button"
-                  onClick={handleDeleteLandmark}
-                  disabled={landmarkSaving || !isAdmin}
-                  aria-label="删除自定义地标图"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            {landmarkError && <p className="mt-2 text-xs text-[#E8B8C2]">{landmarkError}</p>}
-          </div>
-
-          <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-[6px] border border-[#D8DDD8] bg-[#D6E8F0]">
-            <MemoryImage
-              src={memory?.image ?? landmarkImage}
-              alt={`${city.name} memory`}
-              dim={!isLit}
-              fit={memory ? "cover" : "contain"}
-            />
-            {memoryPhotos.length > 1 && (
-              <span className="absolute bottom-2 right-2 rounded-[6px] bg-[#FAFBF7]/86 px-2 py-1 text-xs font-medium text-[#5A6670]/78 shadow-[0_6px_14px_rgba(90,102,112,0.12)]">
-                {memoryPhotos.length} photos
-              </span>
-            )}
-          </div>
-
-          {memoryPhotos.length > 1 && (
-            <div className={`mt-3 grid gap-2 ${expanded ? "grid-cols-5" : "grid-cols-4"}`}>
-              {memoryPhotos.map((photo, index) => {
-                const isCover = memory?.image === photo;
-
-                return (
-                  <button
-                    key={`${memory?.id ?? city.id}-photo-${index}`}
-                    className={`group relative aspect-square overflow-hidden rounded-[4px] border bg-[#D6E8F0] transition ${
-                      isCover
-                        ? "border-[#E8B8C2] shadow-[0_0_0_2px_rgba(245,220,224,0.75)]"
-                        : "border-[#D8DDD8] hover:border-[#E8B8C2]"
-                    }`}
-                    type="button"
-                    onClick={() => handleSetCover(photo)}
-                    aria-label={isCover ? "当前封面" : `将第 ${index + 1} 张照片设为封面`}
-                    disabled={!isAdmin || isCover || Boolean(settingCover)}
-                  >
-                    <MemoryImage src={photo} alt={`${city.name} memory photo ${index + 1}`} fit="cover" />
-                    <span
-                      className={`absolute inset-x-1 bottom-1 rounded-[4px] bg-[#FAFBF7]/90 px-1.5 py-1 text-[10px] font-medium shadow-[0_4px_10px_rgba(90,102,112,0.10)] transition ${
-                        isCover
-                          ? "text-[#E8B8C2] opacity-100"
-                          : "text-[#5A6670]/68 opacity-0 group-hover:opacity-100"
-                      }`}
-                    >
-                      {isCover ? "封面" : settingCover === photo ? "保存中" : "设封面"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {coverError && <p className="mt-2 text-xs text-[#E8B8C2]">{coverError}</p>}
-
-          <p className="mt-4 text-sm leading-6 text-[#5A6670]/82">
-            {memory?.text ?? "写下第一段回忆后，这座城市会被点亮。"}
-          </p>
-          {memory && localMemoryIds.has(memory.id) && (
-            <div className="mt-4 flex gap-2">
-              <button
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-[6px] border border-[#D8DDD8] px-3 py-2 text-xs font-medium text-[#5A6670]/70 transition hover:border-[#A8C8DC] hover:text-[#A8C8DC]"
-                type="button"
-                onClick={() => startEdit(memory)}
-                disabled={!isAdmin}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                编辑
-              </button>
-              <button
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-[6px] border border-[#F5DCE0] px-3 py-2 text-xs font-medium text-[#E8B8C2] transition hover:bg-[#F5DCE0]/55 disabled:opacity-45"
-                type="button"
-                onClick={() => handleDelete(memory)}
-                disabled={!isAdmin || deletingMemoryId === memory.id}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {deletingMemoryId === memory.id ? "删除中" : "删除"}
-              </button>
-            </div>
-          )}
-          {deleteError && <p className="mt-2 text-xs text-[#E8B8C2]">{deleteError}</p>}
-        </>
-      )}
-
-      {showGallery && (
-        <div className="mt-4">
-          {galleryPhotos.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
-              {galleryPhotos.map((photo, index) => (
-                <span
-                  key={`${city.id}-gallery-photo-${index}`}
-                  className="relative aspect-square overflow-hidden rounded-[5px] border border-[#D8DDD8] bg-[#D6E8F0]"
-                >
-                  <MemoryImage src={photo} alt={`${city.name} gallery photo ${index + 1}`} fit="cover" />
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-[7px] border border-dashed border-[#D8DDD8] px-4 py-6 text-center text-sm text-[#5A6670]/56">
-              还没有照片，添加第一段回忆后会出现在这里。
-            </p>
-          )}
-        </div>
-      )}
-
-      {showHistory && (
-        <div className="mt-4 border-t border-dashed border-[#D8DDD8] pt-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-xs font-semibold text-[#5A6670]/70">历史记录</p>
-            <span className="text-[11px] text-[#5A6670]/42">{memories.length} 条</span>
-          </div>
-          <div className={`mt-3 ${expanded ? "space-y-4" : "space-y-3"}`}>
-            {memories.map((record, recordIndex) => {
-              const recordPhotos = photosOfMemory(record);
-              const editable = localMemoryIds.has(record.id);
-
-              return (
-                <article
-                  key={record.id}
-                  className="rounded-[7px] border border-[#D8DDD8]/70 bg-[#FAFBF7]/72 p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold text-[#5A6670]/70">{record.date}</p>
-                    <div className="flex items-center gap-1.5">
-                      {recordIndex === 0 && (
-                        <span className="rounded-full bg-[#F5DCE0]/82 px-2 py-0.5 text-[10px] font-medium text-[#E8B8C2]">
-                          最新
-                        </span>
-                      )}
-                      {editable ? (
-                        <>
-                          <button
-                            className="grid h-6 w-6 place-items-center rounded-[5px] text-[#5A6670]/46 transition hover:bg-[#D6E8F0]/34 hover:text-[#A8C8DC]"
-                            type="button"
-                            onClick={() => startEdit(record)}
-                            disabled={!isAdmin}
-                            aria-label={`编辑 ${record.city} ${record.date} 回忆`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            className="grid h-6 w-6 place-items-center rounded-[5px] text-[#5A6670]/46 transition hover:bg-[#F5DCE0]/46 hover:text-[#E8B8C2] disabled:opacity-40"
-                            type="button"
-                            onClick={() => handleDelete(record)}
-                            disabled={!isAdmin || deletingMemoryId === record.id}
-                            aria-label={`删除 ${record.city} ${record.date} 回忆`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </>
-                      ) : (
-                        <span className="text-[10px] text-[#5A6670]/36">示例</span>
-                      )}
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-[#5A6670]/72">{record.text}</p>
-                  {recordPhotos.length > 0 && (
-                    <div className={`mt-3 grid gap-1.5 ${expanded ? "grid-cols-6" : "grid-cols-5"}`}>
-                      {recordPhotos.slice(0, expanded ? 12 : 10).map((photo, photoIndex) => (
-                        <span
-                          key={`${record.id}-timeline-photo-${photoIndex}`}
-                          className="relative aspect-square overflow-hidden rounded-[4px] border border-[#D8DDD8] bg-[#D6E8F0]"
-                        >
-                          <MemoryImage
-                            src={photo}
-                            alt={`${city.name} history photo ${photoIndex + 1}`}
-                            fit="cover"
-                          />
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {showMemory && !formOpen && (
-        <button
-          className="mt-4 flex w-full items-center gap-2 border-t border-dashed border-[#D8DDD8] pt-4 text-sm font-medium text-[#5A6670]/78 transition hover:text-[#A8C8DC]"
-          type="button"
-          onClick={() => setFormOpen(true)}
-          disabled={!isAdmin}
-        >
-          <Plus className="h-4 w-4" />
-          {isLit ? "Add memory" : "Add memory to light"}
-        </button>
-      )}
-
-      <AnimatePresence initial={false}>
-        {formOpen && (
-          <motion.div
-            key="memory-form"
-            className="overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={spring}
-          >
-            <div className="mt-4 space-y-3 border-t border-dashed border-[#D8DDD8] pt-4">
-              <label className="block">
-                <span className="text-xs font-medium text-[#5A6670]/70">日期</span>
-                <input
-                  className="mt-1.5 w-full rounded-[6px] border border-[#D8DDD8] bg-[#FAFBF7] px-3 py-2 text-sm text-[#5A6670] placeholder:text-[#5A6670]/40 outline-none transition focus:border-[#E8B8C2]"
-                  type="text"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  placeholder="2024.05.20"
-                  inputMode="numeric"
-                  maxLength={10}
-                  aria-invalid={dateInvalid}
-                  disabled={!isAdmin}
-                />
-                {dateInvalid && (
-                  <span className="mt-1.5 block text-xs text-[#E8B8C2]">
-                    请使用 2024.05.20 或 2024.5.20 格式
-                  </span>
-                )}
-              </label>
-
-              <label className="block">
-                <span className="flex items-center justify-between gap-3 text-xs font-medium text-[#5A6670]/70">
-                  一句话回忆
-                  <span className="font-normal text-[#5A6670]/45">
-                    {text.length}/{memoryTextMaxLength}
-                  </span>
-                </span>
-                <textarea
-                  className="mt-1.5 w-full resize-none rounded-[6px] border border-[#D8DDD8] bg-[#FAFBF7] px-3 py-2 text-sm leading-6 text-[#5A6670] placeholder:text-[#5A6670]/40 outline-none transition focus:border-[#E8B8C2]"
-                  rows={3}
-                  value={text}
-                  onChange={(event) => setText(event.target.value)}
-                  placeholder="写下这一刻……"
-                  maxLength={memoryTextMaxLength}
-                  disabled={!isAdmin}
-                />
-              </label>
-
-              <div>
-                <span className="text-xs font-medium text-[#5A6670]/70">照片</span>
-                <input
-                  ref={fileInputRef}
-                  className="hidden"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePickFile}
-                  disabled={!isAdmin}
-                />
-                <button
-                  className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-[6px] border border-dashed border-[#D8DDD8] bg-[#FAFBF7] px-3 py-3 text-sm text-[#5A6670]/70 transition hover:border-[#E8B8C2] hover:text-[#E8B8C2]"
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!isAdmin}
-                >
-                  {photoDrafts.length > 0 ? (
-                    <span className="relative w-full">
-                      <span className="grid grid-cols-4 gap-2">
-                        {photoDrafts.slice(0, 8).map((photo, index) => (
-                          <span
-                            key={`${photo.previewUrl}-${index}`}
-                            className="relative aspect-square overflow-hidden rounded-[4px] bg-[#D6E8F0]"
-                          >
-                            <LocalPrivacyImg
-                              className="pixelated h-full w-full object-cover"
-                              src={photo.previewUrl}
-                              alt={photo.name || `照片预览 ${index + 1}`}
-                            />
-                          </span>
-                        ))}
-                      </span>
-                      <span className="mt-2 block text-xs text-[#5A6670]/58">
-                        已选择 {photoDrafts.length} 张
-                      </span>
-                      {isReadingPhoto && (
-                        <span className="absolute inset-0 grid place-items-center bg-[#FAFBF7]/72 text-xs text-[#5A6670]/70">
-                          读取中
-                        </span>
-                      )}
-                    </span>
-                  ) : (
-                    <>
-                      <ImagePlus className="h-4 w-4" />
-                      选择本地图片，可多选
-                    </>
-                  )}
-                </button>
-                {photoError && (
-                  <span className="mt-1.5 block text-xs text-[#E8B8C2]">{photoError}</span>
-                )}
-              </div>
-
-              <div className="sticky bottom-0 -mx-5 flex items-center gap-2 border-t border-[#D8DDD8]/70 bg-[#FAFBF7]/96 px-5 pb-1 pt-3 shadow-[0_-10px_18px_rgba(250,251,247,0.88)] backdrop-blur">
-                <button
-                  className="flex-1 rounded-[6px] bg-[#F5DCE0] px-3 py-2 text-sm font-medium text-[#E8B8C2] transition hover:bg-[#E8B8C2] hover:text-[#FAFBF7] disabled:cursor-not-allowed disabled:opacity-45"
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!canSave}
-                >
-                  {isSaving ? "保存中" : isEditing ? "保存修改" : "保存回忆"}
-                </button>
-                <button
-                  className="rounded-[6px] px-3 py-2 text-sm text-[#5A6670]/62 transition hover:bg-[#D8DDD8]/28 hover:text-[#5A6670]"
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => {
-                    resetForm(true);
-                    setFormOpen(false);
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-              {saveError && <p className="text-xs text-[#E8B8C2]">{saveError}</p>}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.article>
-  );
-}
-
-function MemoryImage({
-  src,
-  alt,
-  dim = false,
-  fit = "contain",
-}: Readonly<{ src: string; alt: string; dim?: boolean; fit?: "contain" | "cover" }>) {
-  const objectClass = fit === "cover" ? "object-cover" : "object-contain";
-  const className = `pixelated h-full w-full ${objectClass} ${dim ? "opacity-50 grayscale" : ""}`;
-
-  if (isBrowserImageUrl(src)) {
-    return (
-      <LocalPrivacyImg className={className} src={src} alt={alt} />
-    );
-  }
-
-  return (
-    <LocalPrivacyImage
-      className={`pixelated ${objectClass} ${dim ? "opacity-50 grayscale" : ""}`}
-      src={src}
-      alt={alt}
-      fill
-      sizes="292px"
-    />
-  );
-}
 
 function LandmarkSprite({ city, lit }: Readonly<{ city: City; lit: boolean }>) {
   const className = `pixelated h-full w-full object-contain transition duration-500 ${
@@ -1839,9 +853,9 @@ function LandmarkSprite({ city, lit }: Readonly<{ city: City; lit: boolean }>) {
       : "opacity-50 grayscale drop-shadow-[0_8px_14px_rgba(90,102,112,0.08)]"
   }`;
 
-  if (isDataImageUrl(city.sprite)) {
+  if (typeof city.sprite === "string" && city.sprite.startsWith("data:image/")) {
     return (
-      <LocalPrivacyImg className={className} src={city.sprite} alt={city.landmark} />
+      <LocalPrivacyImg className={className} src={city.sprite} alt={city.landmark ?? city.name} />
     );
   }
 
@@ -1849,7 +863,7 @@ function LandmarkSprite({ city, lit }: Readonly<{ city: City; lit: boolean }>) {
     <Image
       className={className}
       src={city.sprite}
-      alt={city.landmark}
+      alt={city.landmark ?? city.name}
       fill
       loading="eager"
       sizes="112px"

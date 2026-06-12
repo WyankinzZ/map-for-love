@@ -18,6 +18,8 @@ import {
   memoryStoreUpdatedEvent,
   type LocalMemoryStore,
 } from "@/data/progress";
+import { type Memory, sortMemoriesByTime, moodConfig } from "@/data/memories";
+import { getCitiesByProvince } from "@/data/cities";
 import { provinces } from "@/data/provinces";
 
 interface ChinaMapProps {
@@ -135,6 +137,16 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
     return chinaFeatures.map((feature) => {
       const id = provinceIdOf(feature);
       const [cx, cy] = path.centroid(feature as never);
+      const isLit = litProvinceIds.has(id);
+      let latestMoodInfo = undefined;
+
+      if (isLit) {
+        const provinceCities = getCitiesByProvince(id);
+        const provinceMemories = provinceCities.flatMap(c => localMemories[c.id] || []);
+        const sorted = sortMemoriesByTime(provinceMemories);
+        const latestMood = sorted[0]?.mood;
+        if (latestMood) latestMoodInfo = moodConfig[latestMood];
+      }
 
       return {
         id,
@@ -142,10 +154,11 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
         x: stableCoordinate(cx),
         y: stableCoordinate(cy),
         province: provinceById.get(id),
-        lit: litProvinceIds.has(id),
+        lit: isLit,
+        moodInfo: latestMoodInfo,
       };
     });
-  }, [height, litProvinceIds, width]);
+  }, [height, litProvinceIds, localMemories, width]);
 
   const hoveredPath = paths.find((path) => path.id === hoveredId);
   const zoomProgress = ((zoom - minZoom) / (maxZoom - minZoom)) * 100;
@@ -257,12 +270,13 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
 
             {paths.map((path) => {
               const isHovered = hoveredId === path.id;
+              const litColor = path.moodInfo?.color ?? colors.sakura;
 
               return (
                 <path
                   key={path.id}
                   d={path.d}
-                  fill={path.lit ? colors.sakura : colors.dim}
+                  fill={path.lit ? litColor : colors.dim}
                   fillOpacity={path.lit ? 0.68 : 0.34}
                   stroke={path.lit ? colors.bloom : colors.ink}
                   strokeOpacity={path.lit ? 0.95 : 0.24}
@@ -337,8 +351,16 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
               transform: "translate(14px, -50%)",
             }}
           >
-            <span className="mr-2 inline-block h-2 w-2 rounded-sm bg-[#E8B8C2]" />
+            <span 
+              className="mr-2 inline-block h-2 w-2 rounded-sm" 
+              style={{ backgroundColor: hoveredPath.moodInfo?.color ?? colors.bloom }} 
+            />
             {hoveredPath.province.name}
+            {hoveredPath.moodInfo && (
+              <span className="ml-1.5 font-medium">
+                · {hoveredPath.moodInfo.label} <span className="text-[12px]">{hoveredPath.moodInfo.emoji}</span>
+              </span>
+            )}
             <span className="ml-2 text-[#5A6670]/60">{hoveredPath.province.nameEn}</span>
           </motion.div>
         )}

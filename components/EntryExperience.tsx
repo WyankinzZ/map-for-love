@@ -276,7 +276,7 @@ export default function EntryExperience() {
               <div className="flex items-center gap-3">
                 <PixelHeart />
                 <div>
-                  <p className="text-lg font-semibold leading-tight text-[#273846]">Map of Us</p>
+                  <p className="text-lg font-semibold leading-tight text-[#273846]">Map For Everyone</p>
                   <p className="mt-0.5 text-xs font-semibold text-[#8A796C]">private map</p>
                 </div>
               </div>

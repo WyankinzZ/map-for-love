@@ -1,8 +1,8 @@
 ![Uploading 8ec0e6225ad10b616db7f0fbd7c51b92.png…]()
 
-# Map of Us
+# Map For Everyone
 
-Map of Us 是一个本地优先的个人情侣记忆地图应用。它使用 Next.js 16 App Router、React 19、Tailwind 4 和 Electron，可以在浏览器里开发，也可以打包成桌面应用。
+Map For Everyone 是一个本地优先的个人情侣记忆地图应用。它使用 Next.js 16 App Router、React 19、Tailwind 4 和 Electron，可以在浏览器里开发，也可以打包成桌面应用。
 
 当前版本的目标是：数据全部保存在用户自己的电脑上，不依赖 Supabase，不需要联网认证。
 
@@ -14,6 +14,24 @@ Map of Us 是一个本地优先的个人情侣记忆地图应用。它使用 Nex
 - 设置页支持完整备份导出、导入恢复、清空数据。
 - Electron 桌面版使用 Next.js standalone 生产服务，不运行 `next dev`。
 - 桌面版数据写入 Electron `userData` 目录，安装包资源目录保持只读。
+
+## Map For Everyone 专属更新 (基于 Map of Us 二创)
+
+基于原版 Map of Us，本项目进行了深度定制和 UI/UX 体验重构，主要修改内容如下：
+
+1. **界面交互重构 (UI/UX 升级)**
+   - 全局主题统一：将各个记忆模块统一为更加美观的白/粉/蓝 (White/Pink/Blue) 现代设计风格。
+   - 弹窗化表单：去除了原本拥挤的侧边栏表单，将新增/编辑操作（纪念日、地点收藏、时光宝盒）升级为顺滑的居中弹窗 (Modal) 交互。
+   - 关于界面重构：左下角的“关于我们”信息提取为独立的悬浮弹窗，让侧边导航栏更加清爽。
+
+2. **管理模块独立与分页 (数据展示优化)**
+   - **地标管理 (Landmarks)**：从各个城市卡片中独立出来，拥有专属的侧边栏入口。新增城市模糊搜索功能，并采用美观的九宫格 (9项/页) 分页展示，方便统一管理。
+   - **登录照片 (Login Photos)**：从基础设置页中剥离，移至专属页面。原有的竖向长列表改为沉浸式 3x3 画廊布局，鼠标悬停即可快速唤出居中弹窗进行独立编辑。
+   - 所有列表页（地点收藏、纪念日等）均统一引入了九宫格分页组件。
+
+3. **智能小组件升级 (Smart Widgets)**
+   - **纪念日轮播卡片**：首页侧边栏的纪念日不再是写死的单一日期，而是会自动读取记录并每 5 秒自动轮播。对于未来的日期，会自动切换为“倒数日”模式。
+   - **天气城市组合框**：将设置中的“沿途天气”普通下拉框升级为支持模糊搜索的组合框 (Combobox)，找城市更加智能快捷。
 
 ## 桌面版密码
 
@@ -39,18 +57,18 @@ Map of Us 是一个本地优先的个人情侣记忆地图应用。它使用 Nex
 
 ### macOS
 
-1. 双击 `Map of Us-0.1.0-arm64.dmg`，把里面的 **Map of Us** 拖进「应用程序」。
-2. 在「应用程序」里 **右键点 Map of Us → 打开**，弹窗里再点一次 **打开**。
-3. 若新版 macOS 没有「打开」选项：打开 **系统设置 → 隐私与安全性**，往下找到关于 Map of Us 的提示，点 **仍要打开**。
+1. 双击 `Map For Everyone-0.1.0-arm64.dmg`，把里面的 **Map For Everyone** 拖进「应用程序」。
+2. 在「应用程序」里 **右键点 Map For Everyone → 打开**，弹窗里再点一次 **打开**。
+3. 若新版 macOS 没有「打开」选项：打开 **系统设置 → 隐私与安全性**，往下找到关于 Map For Everyone 的提示，点 **仍要打开**。
 4. 若提示 **「已损坏，应移到废纸篓」**：打开「终端」运行下面这句去掉隔离标记，然后再打开：
 
    ```bash
-   xattr -cr "/Applications/Map of Us.app"
+   xattr -cr "/Applications/Map For Everyone.app"
    ```
 
 ### Windows
 
-1. 运行 `Map of Us-0.1.0-x64-Setup.exe` 安装。
+1. 运行 `Map For Everyone-0.1.0-x64-Setup.exe` 安装。
 2. 若出现蓝色 **SmartScreen** 提示：点 **更多信息 → 仍要运行**。
 
 
@@ -80,8 +98,8 @@ npm run dist:mac
 产物示例：
 
 ```text
-dist/mac-arm64/Map of Us.app
-dist/Map of Us-0.1.0-arm64.dmg
+dist/mac-arm64/Map For Everyone.app
+dist/Map For Everyone-0.1.0-arm64.dmg
 ```
 
 生成 Windows x64 安装包：
@@ -93,8 +111,8 @@ npm run dist:win
 产物示例：
 
 ```text
-dist/win-unpacked/Map of Us.exe
-dist/Map of Us-0.1.0-x64-Setup.exe
+dist/win-unpacked/Map For Everyone.exe
+dist/Map For Everyone-0.1.0-x64-Setup.exe
 ```
 
 在 macOS 上可以生成 Windows 安装包，但不能完整验证 Windows 运行效果；最终发布前建议在 Windows 真机或 CI 上再安装运行一次。
@@ -115,8 +133,8 @@ data/loginPhotos.private.json
 桌面打包版写入 Electron `userData/data`。常见位置：
 
 ```text
-macOS: ~/Library/Application Support/Map of Us/data
-Windows: %APPDATA%/Map of Us/data
+macOS: ~/Library/Application Support/Map For Everyone/data
+Windows: %APPDATA%/Map For Everyone/data
 ```
 
 可用环境变量覆盖桌面数据目录：

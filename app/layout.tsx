@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Map of Us",
+  title: "Map For Everyone",
   description: "A private map for memories we made together.",
 };
 

@@ -9,7 +9,7 @@ const path = require("node:path");
 const preferredPort = 3002;
 const host = "127.0.0.1";
 
-app.setName("Map of Us");
+app.setName("Map For Everyone");
 
 const isPackaged = app.isPackaged;
 const appRoot = isPackaged ? app.getAppPath() : path.join(__dirname, "..");
@@ -153,7 +153,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
-    title: "Map of Us",
+    title: "Map For Everyone",
     backgroundColor: "#fdfaf3",
     show: true,
     webPreferences: {

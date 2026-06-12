@@ -82,6 +82,7 @@ function normalizeStoredMemory(cityId: string, value: unknown): Memory[] {
     const image = storedImage || photos[0] || city.sprite;
     const id = typeof entry.id === "string" ? entry.id : `${city.id}-local-${index}`;
     const createdAt = typeof entry.createdAt === "string" ? entry.createdAt : new Date(0).toISOString();
+    const mood = typeof entry.mood === "string" ? (entry.mood as any) : undefined;
 
     return [
       {
@@ -94,6 +95,7 @@ function normalizeStoredMemory(cityId: string, value: unknown): Memory[] {
         photos: photos.length > 0 ? photos : [image],
         text,
         createdAt,
+        mood,
       },
     ];
   });
@@ -195,6 +197,7 @@ function parseMemoryPayload(payload: unknown): Memory | null {
   }
 
   const coverImage = photos[0] ?? image ?? city.sprite;
+  const mood = typeof payload.memory.mood === "string" ? (payload.memory.mood as any) : undefined;
 
   return {
     id: `${city.id}-${Date.now()}`,
@@ -206,6 +209,7 @@ function parseMemoryPayload(payload: unknown): Memory | null {
     photos: photos.length > 0 ? photos : [coverImage],
     text: trimmedText,
     createdAt: new Date().toISOString(),
+    mood,
   };
 }
 
@@ -237,6 +241,7 @@ function parseEditPayload(payload: unknown) {
   const text = payload.memory.text;
   const image = payload.memory.image;
   const photos = normalizePhotos(payload.memory.photos).slice(0, maxPhotosPerMemory);
+  const mood = typeof payload.memory.mood === "string" ? (payload.memory.mood as any) : undefined;
 
   if (
     typeof cityId !== "string" ||
@@ -276,6 +281,7 @@ function parseEditPayload(payload: unknown) {
       text: trimmedText,
       image: coverImage,
       photos: safePhotos,
+      mood,
     },
   };
 }
