@@ -9,10 +9,15 @@ import {
   readJsonValue,
   writeJsonValue,
 } from "@/lib/server/supabase";
-import { uploadImageWithFallback } from "@/lib/server/oss";
+import { uploadImageWithFallback, uploadImagesConcurrent } from "@/lib/server/oss";
 import { isLocalPrivacyRequest, localPrivacyImagePlaceholder } from "@/lib/localPrivacy";
 import { requireAdminSession, requireSiteSession } from "@/lib/server/auth";
 import { getBundledDataFilePath, getPrivateDataFilePath } from "@/lib/server/dataDir";
+
+function getCityFolderName(cityId: string): string {
+  const city = cities.find((c) => c.id === cityId);
+  return city ? city.name : cityId;
+}
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -145,21 +150,40 @@ async function writeMemoryStore(store: MemoryStore) {
 }
 
 async function uploadMemoryImages(memory: Memory): Promise<Memory> {
-  const photos = await Promise.all(
-    (memory.photos?.length ? memory.photos : [memory.image]).map((photo, index) =>
-      uploadImageWithFallback(photo, `memories/${memory.cityId}/${memory.id}`, `photo-${index + 1}`),
-    ),
-  );
-  const image = photos.includes(memory.image)
+  const rawPhotos = memory.photos?.length ? memory.photos : [memory.image];
+  const dataUrlPhotos = rawPhotos.filter((p) => p.startsWith("data:image/"));
+  const nonDataUrlPhotos = rawPhotos.filter((p) => !p.startsWith("data:image/"));
+  const folderName = getCityFolderName(memory.cityId);
+  const timestamp = Date.now();
+
+  let uploadedPhotos: string[];
+  if (dataUrlPhotos.length > 1) {
+    const urls = await uploadImagesConcurrent(
+      dataUrlPhotos.map((photo, index) => ({
+        value: photo,
+        pathPrefix: `memories/${folderName}`,
+        fileName: `${timestamp}-${index + 1}`,
+      })),
+    );
+    uploadedPhotos = [...nonDataUrlPhotos, ...urls];
+  } else {
+    uploadedPhotos = await Promise.all(
+      rawPhotos.map((photo, index) =>
+        uploadImageWithFallback(photo, `memories/${folderName}`, `${timestamp}-${index + 1}`),
+      ),
+    );
+  }
+
+  const image = uploadedPhotos.includes(memory.image)
     ? memory.image
     : memory.image.startsWith("data:image/")
-      ? photos[0]
+      ? uploadedPhotos[0]
       : memory.image;
 
   return {
     ...memory,
     image,
-    photos,
+    photos: uploadedPhotos,
   };
 }
 

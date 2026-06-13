@@ -22,6 +22,11 @@ const cityAssetStorePath = getPrivateDataFilePath("cityAssets.private.json");
 const cityAssetStoreKey = "city-assets";
 const imageMaxLength = 12_000_000;
 
+function getCityFolderName(cityId: string): string {
+  const city = cities.find((c) => c.id === cityId);
+  return city ? city.name : cityId;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -118,7 +123,8 @@ export async function PUT(request: NextRequest) {
   }
 
   const assets = await readCityAssetStore();
-  const image = await uploadImageWithFallback(payload.image, `city-assets/${payload.cityId}`, "landmark");
+  const folderName = getCityFolderName(payload.cityId);
+  const image = await uploadImageWithFallback(payload.image, `city-assets/${folderName}`, "landmark");
   const nextAssets = { ...assets, [payload.cityId]: image };
 
   await writeCityAssetStore(nextAssets);
@@ -147,7 +153,7 @@ export async function PATCH(request: NextRequest) {
     await Promise.all(
       Object.entries(normalizedAssets).map(async ([cityId, image]) => [
         cityId,
-        await uploadImageWithFallback(image, `city-assets/${cityId}`, "landmark"),
+        await uploadImageWithFallback(image, `city-assets/${getCityFolderName(cityId)}`, "landmark"),
       ]),
     ),
   );

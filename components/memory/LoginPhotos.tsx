@@ -60,9 +60,10 @@ export default function LoginPhotosPage() {
     if (!file || isWorking) return;
 
     setIsWorking(true);
-    setStatus("正在处理照片...");
+    setStatus("正在压缩照片...");
     try {
       const compressedImage = await compressImageFile(file);
+      setStatus("正在上传到云端...");
       await writeLoginPhoto(slotId, compressedImage);
       setLoginPhotos((prev) => ({ ...prev, [slotId]: compressedImage }));
       setStatus("照片已更新");

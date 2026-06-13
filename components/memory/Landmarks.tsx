@@ -197,12 +197,12 @@ export default function LandmarksPage() {
                       <button
                         type="button"
                         onClick={() => handleUploadClick(city.id)}
-                        disabled={savingCityId === city.id || !isAdmin}
+                        disabled={Boolean(savingCityId) || !isAdmin}
                         className="flex items-center gap-1.5 rounded-[6px] border border-[#A8C8DC] px-3 py-1.5 text-xs font-semibold text-[#A8C8DC] transition hover:bg-[#D6E8F0]/30 disabled:opacity-50"
                         title={isCustom ? "替换地标" : "上传地标"}
                       >
                         <ImagePlus className="h-3.5 w-3.5" />
-                        {isCustom ? "替换" : "上传"}
+                        {savingCityId === city.id ? "上传中..." : isCustom ? "替换" : "上传"}
                       </button>
                       {isCustom && (
                         <button

@@ -733,7 +733,13 @@ export default function CityPanel({
                   onClick={handleSave}
                   disabled={!canSave}
                 >
-                  {isSaving ? "保存中" : isEditing ? "保存修改" : "保存回忆"}
+                  {isSaving
+                    ? photoDrafts.length > 0
+                      ? `正在上传 ${photoDrafts.length} 张照片...`
+                      : "保存中..."
+                    : isEditing
+                      ? "保存修改"
+                      : "保存回忆"}
                 </button>
                 <button
                   className="rounded-[6px] px-3 py-2 text-sm text-[#5A6670]/62 transition hover:bg-[#D8DDD8]/28 hover:text-[#5A6670]"
