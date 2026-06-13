@@ -13,7 +13,7 @@ import {
   type MapCamera, type DragState, type CityAssetStore, type CardAnchor,
   colors, spring, memoryCardWidth, memoryCardGap, memoryCardMaxHeight, cityListPanelWidth,
   revokeObjectUrl, clampZoom, stableCoordinate,
-  memoryApiCall, dispatchMemoryUpdate
+  memoryApiCall, dispatchMemoryUpdate, fetchMemoriesDeduplicated
 } from "./province/Shared";
 import CityPanel from "./province/CityPanel";
 import { LocalPrivacyImg } from "@/components/LocalPrivacyImage";
@@ -175,6 +175,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
   const [dragging, setDragging] = useState(false);
   const [frameScale, setFrameScale] = useState(1);
   const [localMemories, setLocalMemories] = useState<LocalMemoryStore>({});
+  const [isLoading, setIsLoading] = useState(true);
   const [cityAssets, setCityAssets] = useState<CityAssetStore>({});
   const [camera, setCameraState] = useState<MapCamera>({ scale: 1, x: 0, y: 0 });
   const provinceCities = useMemo(() => getCitiesByProvince(province.id), [province.id]);
@@ -232,7 +233,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
 
     async function loadLocalState() {
       const [memoryResponse, assetResponse] = await Promise.all([
-        fetch("/api/memories", { cache: "no-store" }).catch(() => null),
+        fetchMemoriesDeduplicated().catch(() => null),
         fetch("/api/city-assets", { cache: "no-store" }).catch(() => null),
       ]);
 
@@ -246,6 +247,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
       if (cancelled) return;
       if (memoryData?.memories) setLocalMemories(memoryData.memories);
       if (assetData?.assets) setCityAssets(assetData.assets);
+      setIsLoading(false);
     }
 
     loadLocalState();
@@ -680,6 +682,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
           key={selectedCity.id}
           city={selectedCity}
           localMemories={localMemories[selectedCity.id] ?? []}
+          isLoading={isLoading}
           isLit={litCityIds.has(selectedCity.id)}
           anchor={cardAnchor}
           isAdmin={isAdmin}

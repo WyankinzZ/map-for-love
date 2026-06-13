@@ -5,9 +5,9 @@ import {
   assertWritableStorageConfigured,
   isSupabaseConfigured,
   readJsonValue,
-  uploadDataImage,
   writeJsonValue,
 } from "@/lib/server/supabase";
+import { uploadImageWithFallback } from "@/lib/server/oss";
 import { isLocalPrivacyRequest } from "@/lib/localPrivacy";
 import { getMissingAuthEnv, requireAdminSession } from "@/lib/server/auth";
 import { getPrivateDataFilePath } from "@/lib/server/dataDir";
@@ -181,7 +181,7 @@ export async function PUT(request: NextRequest) {
   const store = await readLoginPhotoStore();
 
   if ("image" in payload) {
-    const image = await uploadDataImage(payload.image, `login-photos/${payload.slotId}`, "cover");
+    const image = await uploadImageWithFallback(payload.image, `login-photos/${payload.slotId}`, "cover");
     const nextStore = { ...store, photos: { ...store.photos, [payload.slotId]: image } };
 
     await writeLoginPhotoStore(nextStore);
@@ -221,7 +221,7 @@ export async function PATCH(request: NextRequest) {
     await Promise.all(
       Object.entries(normalizedPhotos).map(async ([slotId, image]) => [
         slotId,
-        await uploadDataImage(image, `login-photos/${slotId}`, "cover"),
+        await uploadImageWithFallback(image, `login-photos/${slotId}`, "cover"),
       ]),
     ),
   );

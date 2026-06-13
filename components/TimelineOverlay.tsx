@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Route } from "lucide-react";
 import { cities } from "@/data/cities";
 import { sortMemoriesByTime } from "@/data/memories";
+import { fetchMemoriesDeduplicated } from "@/components/province/Shared";
 import {
   memoryStoreUpdatedEvent,
   type LocalMemoryStore,
@@ -45,7 +46,7 @@ export default function TimelineOverlay({
     };
 
     async function load() {
-      const res = await fetch("/api/memories", { cache: "no-store" }).catch(() => null);
+      const res = await fetchMemoriesDeduplicated().catch(() => null);
       if (!res?.ok) return;
       const data = (await res.json().catch(() => null)) as { memories?: LocalMemoryStore } | null;
       if (!cancelled && data?.memories) setLocalMemories(data.memories);

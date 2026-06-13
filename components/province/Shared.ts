@@ -118,3 +118,15 @@ export async function memoryApiCall(
 export function dispatchMemoryUpdate(memories: LocalMemoryStore) {
   window.dispatchEvent(new CustomEvent(memoryStoreUpdatedEvent, { detail: memories }));
 }
+
+let memoryFetchPromise: Promise<Response> | null = null;
+export function fetchMemoriesDeduplicated(): Promise<Response> {
+  if (memoryFetchPromise) {
+    return memoryFetchPromise.then((res) => res.clone());
+  }
+  memoryFetchPromise = fetch("/api/memories", { cache: "no-store" });
+  setTimeout(() => {
+    memoryFetchPromise = null;
+  }, 50);
+  return memoryFetchPromise.then((res) => res.clone());
+}

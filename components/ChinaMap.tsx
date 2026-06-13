@@ -22,6 +22,7 @@ import { sortMemoriesByTime, moodConfig } from "@/data/memories";
 import { getCitiesByProvince } from "@/data/cities";
 import { provinces } from "@/data/provinces";
 import TimelineOverlay, { TimelineToggle } from "@/components/TimelineOverlay";
+import { fetchMemoriesDeduplicated } from "@/components/province/Shared";
 
 interface ChinaMapProps {
   width?: number;
@@ -119,7 +120,7 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
     };
 
     async function loadLocalMemories() {
-      const response = await fetch("/api/memories", { cache: "no-store" }).catch(() => null);
+      const response = await fetchMemoriesDeduplicated().catch(() => null);
       if (!response?.ok) return;
 
       const data = (await response.json().catch(() => null)) as

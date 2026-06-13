@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { ImagePlus, Maximize2, Minimize2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { type City } from "@/data/cities";
@@ -18,6 +19,7 @@ import { Lightbox, type LightboxPhoto } from "@/components/shared/Lightbox";
 export default function CityPanel({
   city,
   localMemories,
+  isLoading,
   isLit,
   anchor,
   isAdmin,
@@ -30,6 +32,7 @@ export default function CityPanel({
 }: Readonly<{
   city: City;
   localMemories: Memory[];
+  isLoading: boolean;
   isLit: boolean;
   anchor: CardAnchor | null;
   isAdmin: boolean;
@@ -49,14 +52,25 @@ export default function CityPanel({
         : []),
     ],
   );
-  const memory = memories[0];
+  
+  const searchParams = useSearchParams();
+  const targetMemoryId = searchParams?.get("memory");
+  
+  const memory = useMemo(() => {
+    if (targetMemoryId) {
+      const found = memories.find((m) => m.id === targetMemoryId);
+      if (found) return found;
+    }
+    return memories[0];
+  }, [memories, targetMemoryId]);
+  
   const memoryPhotos = photosOfMemory(memory);
   const galleryPhotos = Array.from(new Set(memories.flatMap((item) => photosOfMemory(item))));
   const localMemoryIds = useMemo(
     () => new Set(localMemories.map((item) => item.id)),
     [localMemories],
   );
-  const [formOpen, setFormOpen] = useState(memories.length === 0 && isAdmin);
+  const [formOpen, setFormOpen] = useState(!isLoading && memories.length === 0 && isAdmin);
   const [date, setDate] = useState("");
   const [text, setText] = useState("");
   const [mood, setMood] = useState<MemoryMood | undefined>();
@@ -82,12 +96,14 @@ export default function CityPanel({
   const userOpenedFormRef = useRef(false);
 
   useEffect(() => {
-    if (memories.length > 0 && formOpen && !date && !text && photoDrafts.length === 0 && !editingMemory) {
+    if (!isLoading && memories.length === 0 && isAdmin && !userOpenedFormRef.current && !editingMemory) {
+      setFormOpen(true);
+    } else if (memories.length > 0 && formOpen && !date && !text && photoDrafts.length === 0 && !editingMemory) {
       if (!userOpenedFormRef.current) {
         setFormOpen(false);
       }
     }
-  }, [memories.length, formOpen, date, text, photoDrafts.length, editingMemory]);
+  }, [isLoading, memories.length, formOpen, date, text, photoDrafts.length, editingMemory, isAdmin]);
 
   const trimmedDate = date.trim();
   const trimmedText = text.trim();

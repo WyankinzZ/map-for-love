@@ -44,7 +44,13 @@ export function CitySearchSelect({
   }, [matchedCity]);
 
   const filtered = useMemo(
-    () => (search ? cityOptions.filter((c) => c.name.includes(search)) : cityOptions),
+    () => {
+      if (!search.trim()) return cityOptions;
+      const q = search.toLowerCase();
+      return cityOptions.filter((c) => 
+        c.name.toLowerCase().includes(q) || c.nameEn.toLowerCase().includes(q)
+      );
+    },
     [search],
   );
 

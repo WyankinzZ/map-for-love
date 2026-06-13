@@ -10,6 +10,7 @@ import {
 } from "@/data/progress";
 import { memories, type Memory } from "@/data/memories";
 import { LocalPrivacyImage, LocalPrivacyImg } from "@/components/LocalPrivacyImage";
+import { fetchMemoriesDeduplicated } from "@/components/province/Shared";
 
 const isBrowserImageUrl = (url: string) => url.startsWith("data:image/") || url.startsWith("https://");
 const randomMemoryCount = 3;
@@ -69,7 +70,7 @@ export default function RecentMemories() {
     };
 
     async function loadLocalMemories() {
-      const response = await fetch("/api/memories", { cache: "no-store" }).catch(() => null);
+      const response = await fetchMemoriesDeduplicated().catch(() => null);
       if (!response?.ok) {
         if (!cancelled) setRandomMemories(pickRandomMemories(collectMemories({})));
         return;

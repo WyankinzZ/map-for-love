@@ -21,6 +21,8 @@ import { writeAdminMode } from '@/data/adminMode';
 import { PasswordSection } from './PasswordSection';
 import { LogoSection } from './LogoSection';
 import { BackupSection } from './BackupSection';
+import { BatchImportPhotosSection } from './BatchImportPhotosSection';
+import { OssSection } from './OssSection';
 
 export default function SettingsPage() {
   const isAdmin = useAdminMode();
@@ -202,6 +204,20 @@ export default function SettingsPage() {
           setAppSettings={setAppSettings}
           setLoginPhotos={setLoginPhotos}
           importInputRef={importInputRef}
+        />
+        <OssSection
+          isAdmin={isAdmin}
+          isWorking={isWorking}
+          setIsWorking={setIsWorking}
+          setStatus={setStatus}
+        />
+        
+        <BatchImportPhotosSection
+          isAdmin={isAdmin}
+          isWorking={isWorking}
+          setIsWorking={setIsWorking}
+          setStatus={setStatus}
+          setMemoryCount={setMemoryCount}
         />
       </section>
       {status && (

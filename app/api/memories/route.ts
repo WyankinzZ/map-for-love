@@ -7,9 +7,9 @@ import {
   assertWritableStorageConfigured,
   isSupabaseConfigured,
   readJsonValue,
-  uploadDataImage,
   writeJsonValue,
 } from "@/lib/server/supabase";
+import { uploadImageWithFallback } from "@/lib/server/oss";
 import { isLocalPrivacyRequest, localPrivacyImagePlaceholder } from "@/lib/localPrivacy";
 import { requireAdminSession, requireSiteSession } from "@/lib/server/auth";
 import { getBundledDataFilePath, getPrivateDataFilePath } from "@/lib/server/dataDir";
@@ -147,7 +147,7 @@ async function writeMemoryStore(store: MemoryStore) {
 async function uploadMemoryImages(memory: Memory): Promise<Memory> {
   const photos = await Promise.all(
     (memory.photos?.length ? memory.photos : [memory.image]).map((photo, index) =>
-      uploadDataImage(photo, `memories/${memory.cityId}/${memory.id}`, `photo-${index + 1}`),
+      uploadImageWithFallback(photo, `memories/${memory.cityId}/${memory.id}`, `photo-${index + 1}`),
     ),
   );
   const image = photos.includes(memory.image)

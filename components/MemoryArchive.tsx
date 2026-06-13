@@ -24,6 +24,8 @@ import {
   type LocalMemoryStore,
 } from "@/data/progress";
 import { LocalPrivacyImage, LocalPrivacyImg } from "@/components/LocalPrivacyImage";
+import { getLitCityIds } from "@/data/progress";
+import { fetchMemoriesDeduplicated } from "@/components/province/Shared";
 import { Lightbox, type LightboxPhoto } from "@/components/shared/Lightbox";
 
 type ArchiveView = "city" | "timeline";
@@ -128,7 +130,7 @@ export default function MemoryArchive() {
     };
 
     async function loadLocalMemories() {
-      const response = await fetch("/api/memories", { cache: "no-store" }).catch(() => null);
+      const response = await fetchMemoriesDeduplicated().catch(() => null);
       if (!response?.ok) return;
 
       const data = (await response.json().catch(() => null)) as

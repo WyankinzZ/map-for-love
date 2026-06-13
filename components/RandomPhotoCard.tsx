@@ -10,9 +10,11 @@ import {
   type LocalMemoryStore,
 } from "@/data/progress";
 import { LocalPrivacyImage, LocalPrivacyImg } from "@/components/LocalPrivacyImage";
+import { fetchMemoriesDeduplicated } from "@/components/province/Shared";
 
 interface RandomPhoto {
   id: string;
+  memoryId: string;
   src: string;
   city: string;
   cityId: string;
@@ -64,6 +66,7 @@ export default function RandomPhotoCard() {
       const nextPhotos = collectMemories(localMemories).flatMap((memory) =>
         (memory.photos?.length ? memory.photos : [memory.image]).map((src, photoIndex) => ({
           id: `${memory.id}-${photoIndex}`,
+          memoryId: memory.id,
           src,
           city: memory.city,
           cityId: memory.cityId,
@@ -82,7 +85,7 @@ export default function RandomPhotoCard() {
     };
 
     async function loadLocalMemories() {
-      const response = await fetch("/api/memories", { cache: "no-store" }).catch(() => null);
+      const response = await fetchMemoriesDeduplicated().catch(() => null);
       if (!response?.ok) {
         if (!cancelled) applyMemories({});
         return;
@@ -107,7 +110,7 @@ export default function RandomPhotoCard() {
   const href = useMemo(() => {
     if (!photo) return "/memories";
     const city = cities.find((candidate) => candidate.id === photo.cityId);
-    return city ? `/province/${city.provinceId}?city=${photo.cityId}` : "/memories";
+    return city ? `/province/${city.provinceId}?city=${photo.cityId}&memory=${photo.memoryId}` : "/memories";
   }, [photo]);
 
   const shufflePhoto = () => {

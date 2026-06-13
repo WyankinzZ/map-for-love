@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { LocalPrivacyImage, LocalPrivacyImg } from "@/components/LocalPrivacyImage";
@@ -22,7 +23,12 @@ export function Lightbox({ photos, initialIndex = 0, onClose }: Readonly<Lightbo
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchDelta, setTouchDelta] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const goPrev = useCallback(() => {
     setCurrentIndex((i) => (i > 0 ? i - 1 : photos.length - 1));
@@ -90,7 +96,7 @@ export function Lightbox({ photos, initialIndex = 0, onClose }: Readonly<Lightbo
     );
   };
 
-  return (
+  const content = (
     <AnimatePresence>
       <motion.div
         ref={containerRef}
@@ -163,4 +169,6 @@ export function Lightbox({ photos, initialIndex = 0, onClose }: Readonly<Lightbo
       </motion.div>
     </AnimatePresence>
   );
+
+  return mounted ? createPortal(content, document.body) : null;
 }

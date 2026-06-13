@@ -6,9 +6,9 @@ import {
   assertWritableStorageConfigured,
   isSupabaseConfigured,
   readJsonValue,
-  uploadDataImage,
   writeJsonValue,
 } from "@/lib/server/supabase";
+import { uploadImageWithFallback } from "@/lib/server/oss";
 import { isLocalPrivacyRequest, localPrivacyImagePlaceholder } from "@/lib/localPrivacy";
 import { getMissingAuthEnv, hasSiteSession, requireAdminSession } from "@/lib/server/auth";
 import { getPrivateDataFilePath } from "@/lib/server/dataDir";
@@ -118,7 +118,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const assets = await readCityAssetStore();
-  const image = await uploadDataImage(payload.image, `city-assets/${payload.cityId}`, "landmark");
+  const image = await uploadImageWithFallback(payload.image, `city-assets/${payload.cityId}`, "landmark");
   const nextAssets = { ...assets, [payload.cityId]: image };
 
   await writeCityAssetStore(nextAssets);
@@ -147,7 +147,7 @@ export async function PATCH(request: NextRequest) {
     await Promise.all(
       Object.entries(normalizedAssets).map(async ([cityId, image]) => [
         cityId,
-        await uploadDataImage(image, `city-assets/${cityId}`, "landmark"),
+        await uploadImageWithFallback(image, `city-assets/${cityId}`, "landmark"),
       ]),
     ),
   );
