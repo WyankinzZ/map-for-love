@@ -28,6 +28,9 @@
       "output": "dist"
     },
     "asar": true,
+    "asarUnpack": [
+      ".next/standalone/**/*"
+    ],
     "npmRebuild": false,
     "afterPack": "./scripts/after-pack.cjs",
     "files": [

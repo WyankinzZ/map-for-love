@@ -13,6 +13,7 @@ app.setName("Map for Love");
 
 const isPackaged = app.isPackaged;
 const appRoot = isPackaged ? app.getAppPath() : path.join(__dirname, "..");
+const unpackedRoot = isPackaged ? appRoot.replace(/\.asar$/, '.asar.unpacked') : appRoot;
 const userDataDir = app.getPath("userData");
 const dataDir = process.env.MAP_OF_US_DATA_DIR || path.join(userDataDir, "data");
 const authConfigPath = path.join(userDataDir, "auth.local.json");
@@ -62,7 +63,7 @@ function getDesktopEnv(port) {
     MAP_OF_US_DESKTOP: "1",
     MAP_OF_US_STORAGE_MODE: "local",
     MAP_OF_US_DATA_DIR: dataDir,
-    MAP_OF_US_BUNDLED_DATA_DIR: path.join(appRoot, isPackaged ? ".next/standalone/data" : "data"),
+    MAP_OF_US_BUNDLED_DATA_DIR: path.join(unpackedRoot, isPackaged ? ".next/standalone/data" : "data"),
     MAP_OF_US_AUTH_CONFIG: authConfigPath,
     SITE_PASSWORD: process.env.SITE_PASSWORD || authConfig.sitePassword,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || authConfig.adminPassword,
@@ -96,7 +97,7 @@ function startNextServer(port) {
   if (isPackaged) {
     // Run the Next standalone server inside this Electron process (not a child
     // process), so macOS shows only one Dock icon instead of a second "exec".
-    const serverDir = path.join(appRoot, ".next", "standalone");
+    const serverDir = path.join(unpackedRoot, ".next", "standalone");
     const env = getDesktopEnv(port);
 
     for (const [key, value] of Object.entries(env)) {

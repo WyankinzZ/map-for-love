@@ -49,7 +49,8 @@ export function getStorageMode(): StorageMode {
 
   const isElectron = Boolean(
     (window as unknown as Record<string, unknown>).electronAPI ||
-    navigator.userAgent.includes("Electron"),
+    navigator.userAgent.includes("Electron") ||
+    process.env.NODE_ENV === "development"
   );
 
   cachedMode = isElectron ? "electron" : "oss";
