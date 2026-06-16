@@ -16,6 +16,7 @@ async function copyIfPresent(from, to) {
 await mkdir(standaloneNextDir, { recursive: true });
 await copyIfPresent(path.join(root, "public"), path.join(standaloneDir, "public"));
 await copyIfPresent(path.join(root, ".next", "static"), path.join(standaloneNextDir, "static"));
+await copyIfPresent(path.join(root, "node_modules", "@img"), path.join(standaloneDir, "node_modules", "@img"));
 await copyIfPresent(path.join(root, "data", "localMemories.json"), path.join(standaloneDir, "data", "localMemories.json"));
 
 await Promise.all(
