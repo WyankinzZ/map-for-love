@@ -23,6 +23,8 @@ import { getCitiesByProvince } from "@/data/cities";
 import { provinces } from "@/data/provinces";
 import TimelineOverlay, { TimelineToggle } from "@/components/TimelineOverlay";
 import { fetchMemoriesDeduplicated } from "@/components/province/Shared";
+import { readWishlist, WISHLIST_UPDATED_EVENT, type WishItem } from "@/components/memory/wishlistStore";
+import { cities } from "@/data/cities";
 
 interface ChinaMapProps {
   width?: number;
@@ -129,16 +131,61 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
   const [zoomCollapsed, setZoomCollapsed] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [wishes, setWishes] = useState<WishItem[]>([]);
+  const [hoveredWish, setHoveredWish] = useState<(WishItem & { x: number; y: number }) | null>(null);
+  const [navigatingProvince, setNavigatingProvince] = useState<string | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const isContinuousZooming = useRef(false);
+  const zoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const router = useRouter();
   const pinchRef = useRef<{ dist: number }>({ dist: 0 });
 
   const resetMap = () => {
+    isContinuousZooming.current = false;
     setZoom(1);
-    animate(x, 0, { type: "spring", stiffness: 100, damping: 20 });
-    animate(y, 0, { type: "spring", stiffness: 100, damping: 20 });
+    animate(x, 0, { type: "spring", stiffness: 120, damping: 20 });
+    animate(y, 0, { type: "spring", stiffness: 120, damping: 20 });
   };
+
+  // Mouse wheel zoom towards pointer
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      isContinuousZooming.current = true;
+      if (zoomTimeoutRef.current) clearTimeout(zoomTimeoutRef.current);
+      zoomTimeoutRef.current = setTimeout(() => {
+        isContinuousZooming.current = false;
+      }, 200);
+
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - (rect.left + rect.width / 2);
+      const mouseY = e.clientY - (rect.top + rect.height / 2);
+
+      setZoom((current) => {
+        const next = Math.min(Math.max(current * factor, minZoom), maxZoom);
+        const ratio = next / current;
+        if (ratio !== 1) {
+          const curX = x.get();
+          const curY = y.get();
+          x.set(mouseX - (mouseX - curX) * ratio);
+          y.set(mouseY - (mouseY - curY) * ratio);
+        }
+        return Number(next.toFixed(3));
+      });
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+      if (zoomTimeoutRef.current) clearTimeout(zoomTimeoutRef.current);
+    };
+  }, [x, y]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +208,13 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
     };
   }, []);
 
+  // Prefetch all province detail pages on client mount so transitions are instantaneous
+  useEffect(() => {
+    for (const p of provinces) {
+      router.prefetch(`/province/${p.id}`);
+    }
+  }, [router]);
+
   const litProvinceIds = useMemo(
     () => getLitProvinceIds(getLitCityIds(localMemories)),
     [localMemories],
@@ -169,19 +223,33 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
   const projection = useMemo(() => makeProjection(width, height, 24), [width, height]);
 
   useEffect(() => {
-    const handleToggle = (e: CustomEvent<boolean>) => {
-      const active = e.detail;
-      setShowTimeline(active);
-      setZoom(active ? 1.35 : 1);
+    setWishes(readWishlist());
+    const handleWishUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<WishItem[]>).detail;
+      setWishes(detail || readWishlist());
     };
-    window.addEventListener("toggle-timeline", handleToggle as EventListener);
-    return () => window.removeEventListener("toggle-timeline", handleToggle as EventListener);
+    window.addEventListener(WISHLIST_UPDATED_EVENT, handleWishUpdate);
+    return () => window.removeEventListener(WISHLIST_UPDATED_EVENT, handleWishUpdate);
   }, []);
 
-  useEffect(() => {
-    // Keep sidebar card in sync with local state (e.g. if map unmounts or timeline auto-closes)
-    window.dispatchEvent(new CustomEvent("timeline-state-sync", { detail: showTimeline }));
-  }, [showTimeline]);
+  const wishPins = useMemo(() => {
+    const litCities = getLitCityIds(localMemories);
+    return wishes
+      .filter((w) => !w.isFulfilled && !litCities.has(w.cityId))
+      .map((w) => {
+        const city = cities.find((c) => c.id === w.cityId);
+        if (!city) return null;
+        const projected = projection([city.lng, city.lat]);
+        if (!projected) return null;
+        return {
+          ...w,
+          x: Number(projected[0].toFixed(2)),
+          y: Number(projected[1].toFixed(2)),
+          city,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+  }, [wishes, localMemories, projection]);
 
   const timelinePointCount = useMemo(() => {
     const allMemories = Object.values(localMemories).flat();
@@ -233,11 +301,37 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
   };
 
   const goProvince = (id: string) => {
+    if (navigatingProvince) return;
+    setNavigatingProvince(id);
     router.push(`/province/${id}`);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const initX = x.get();
+      const initY = y.get();
+
+      const onPointerMove = (ev: PointerEvent) => {
+        x.set(initX + (ev.clientX - startX));
+        y.set(initY + (ev.clientY - startY));
+      };
+
+      const onPointerUp = () => {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+      };
+
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    }
   };
 
   return (
     <motion.div
+      ref={mapContainerRef}
       className={`relative ${className ?? ""}`}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -273,7 +367,10 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
             <button
               className="grid h-8 w-8 place-items-center rounded-full text-[#5A6670] transition hover:bg-[#D6E8F0]/42 disabled:opacity-35"
               type="button"
-              onClick={() => setZoom((z) => Math.min(z * 1.5, maxZoom))}
+              onClick={() => {
+                isContinuousZooming.current = false;
+                setZoom((z) => Math.min(z * 1.5, maxZoom));
+              }}
               disabled={zoom >= maxZoom}
               aria-label="放大中国地图"
             >
@@ -287,7 +384,14 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
                 max={maxZoom}
                 step="0.01"
                 value={zoom}
-                onChange={(event) => setClampedZoom(Number(event.target.value))}
+                onChange={(event) => {
+                  isContinuousZooming.current = true;
+                  if (zoomTimeoutRef.current) clearTimeout(zoomTimeoutRef.current);
+                  zoomTimeoutRef.current = setTimeout(() => {
+                    isContinuousZooming.current = false;
+                  }, 180);
+                  setClampedZoom(Number(event.target.value));
+                }}
                 aria-label="拖动缩放中国地图"
                 style={{ "--zoom-progress": `${zoomProgress}%` } as CSSProperties}
               />
@@ -295,7 +399,10 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
             <button
               className="grid h-8 w-8 place-items-center rounded-full text-[#5A6670] transition hover:bg-[#F5DCE0]/55 disabled:opacity-35"
               type="button"
-              onClick={() => setZoom((z) => Math.max(z / 1.5, minZoom))}
+              onClick={() => {
+                isContinuousZooming.current = false;
+                setZoom((z) => Math.max(z / 1.5, minZoom));
+              }}
               disabled={zoom <= minZoom}
               aria-label="缩小中国地图"
             >
@@ -325,19 +432,27 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
       <motion.div
         drag
         dragConstraints={{ 
-          left: -width * Math.max(0, zoom - 1), 
-          right: width * Math.max(0, zoom - 1), 
-          top: -height * Math.max(0, zoom - 1), 
-          bottom: height * Math.max(0, zoom - 1) 
+          left: -width * Math.max(0.45, (zoom - 1) * 0.7 + 0.45), 
+          right: width * Math.max(0.45, (zoom - 1) * 0.7 + 0.45), 
+          top: -height * Math.max(0.45, (zoom - 1) * 0.7 + 0.45), 
+          bottom: height * Math.max(0.45, (zoom - 1) * 0.7 + 0.45) 
         }}
-        dragElastic={0.1}
-        className="map-visual-scale relative h-full w-full overflow-visible cursor-grab active:cursor-grabbing"
+        dragElastic={0.08}
+        dragMomentum={true}
+        dragTransition={{ bounceStiffness: 260, bounceDamping: 24 }}
+        className="map-visual-scale relative h-full w-full overflow-visible cursor-grab active:cursor-grabbing select-none"
         animate={{ scale: zoom }}
-        transition={{ type: "spring", stiffness: 100, damping: 20 }}
-        style={{ x, y, transformOrigin: "50% 50%" }}
+        transition={
+          isContinuousZooming.current
+            ? { duration: 0 }
+            : { type: "spring", stiffness: 220, damping: 25 }
+        }
+        style={{ x, y, transformOrigin: "50% 50%", willChange: "transform" }}
+        onPointerDown={handlePointerDown}
       >
         <svg
-          className="h-full w-full overflow-visible drop-shadow-[0_16px_26px_rgba(168,200,220,0.18)]"
+          className="h-full w-full overflow-visible"
+          style={{ filter: "drop-shadow(0 14px 24px rgba(168,200,220,0.15))" }}
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           aria-label="China map with visited provinces highlighted"
@@ -376,21 +491,26 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
 
             {paths.map((path) => {
               const isHovered = hoveredId === path.id;
+              const isNavigating = navigatingProvince === path.id;
+              const isOtherNavigating = navigatingProvince !== null && !isNavigating;
               const litColor = path.moodInfo?.color ?? colors.sakura;
 
               return (
                 <path
                   key={path.id}
                   d={path.d}
-                  fill={path.lit ? litColor : colors.dim}
-                  fillOpacity={path.lit ? 0.68 : 0.34}
-                  stroke={path.lit ? colors.bloom : colors.ink}
-                  strokeOpacity={path.lit ? 0.95 : 0.24}
-                  strokeWidth={path.lit ? 2.2 : 1.25}
+                  fill={path.lit ? litColor : isHovered || isNavigating ? "#F9ECEF" : colors.dim}
+                  fillOpacity={isOtherNavigating ? 0.35 : path.lit ? 0.68 : isHovered || isNavigating ? 0.52 : 0.34}
+                  stroke={path.lit ? colors.bloom : isHovered || isNavigating ? "#D86F82" : colors.ink}
+                  strokeOpacity={isOtherNavigating ? 0.2 : path.lit ? 0.95 : isHovered || isNavigating ? 0.8 : 0.24}
+                  strokeWidth={path.lit ? 2.2 : isHovered || isNavigating ? 2 : 1.25}
                   strokeLinejoin="round"
-                  className="cursor-pointer transition-all duration-300"
-                  filter={path.lit || isHovered ? "url(#visitedGlow)" : undefined}
-                  onMouseEnter={() => setHoveredId(path.id)}
+                  className="cursor-pointer transition-colors duration-150"
+                  filter={path.lit || isHovered || isNavigating ? "url(#visitedGlow)" : undefined}
+                  onMouseEnter={() => {
+                    setHoveredId(path.id);
+                    router.prefetch(`/province/${path.id}`);
+                  }}
                   onMouseLeave={() =>
                     setHoveredId((current) => (current === path.id ? null : current))
                   }
@@ -443,6 +563,34 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
                 />
               ) : null,
             )}
+
+            {/* Wishlist Pending Flag Pins */}
+            {wishPins.map((pin) => (
+              <g
+                key={pin.id}
+                className="cursor-pointer transition-transform duration-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push("/wishlist");
+                }}
+                onMouseEnter={() => setHoveredWish(pin)}
+                onMouseLeave={() => setHoveredWish(null)}
+              >
+                <circle
+                  cx={pin.x}
+                  cy={pin.y}
+                  r="9"
+                  fill="#F5DCE0"
+                  opacity="0.5"
+                  className="animate-pulse"
+                />
+                <circle cx={pin.x} cy={pin.y} r="3" fill="#D86F82" />
+                <g transform={`translate(${pin.x - 1.5}, ${pin.y - 17})`}>
+                  <path d="M 0 0 L 10 3 L 0 6.5 Z" fill="#D86F82" />
+                  <line x1="0" y1="0" x2="0" y2="15" stroke="#D86F82" strokeWidth="1.5" strokeLinecap="round" />
+                </g>
+              </g>
+            ))}
           </g>
         </svg>
 
@@ -451,9 +599,10 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
           height={height}
           projection={projection}
           visible={showTimeline}
+          onClose={() => setShowTimeline(false)}
         />
 
-        {hoveredPath?.province && (
+        {!navigatingProvince && hoveredPath?.province && (
           <motion.div
             className="pointer-events-none absolute rounded-[8px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/90 px-3 py-2 text-sm text-[#5A6670] shadow-[0_10px_30px_rgba(90,102,112,0.12)] backdrop-blur"
             initial={{ opacity: 0, y: 4 }}
@@ -477,7 +626,47 @@ export default function ChinaMap({ width = 1100, height = 860, className }: Chin
             <span className="ml-2 text-[#5A6670]/60">{hoveredPath.province.nameEn}</span>
           </motion.div>
         )}
+
+        {!navigatingProvince && hoveredWish && (
+          <motion.div
+            className="pointer-events-none absolute z-40 rounded-[8px] border border-[#F5DCE0] bg-[#FAFBF7]/95 px-3 py-2 text-xs text-[#5A6670] shadow-[0_10px_28px_rgba(90,102,112,0.15)] backdrop-blur"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              left: `${(hoveredWish.x / width) * 100}%`,
+              top: `${(hoveredWish.y / height) * 100}%`,
+              transform: "translate(-50%, -135%)",
+            }}
+          >
+            <div className="flex items-center gap-1 font-bold text-[#D86F82]">
+              <span>🚩 想去心愿：{hoveredWish.cityName}</span>
+            </div>
+            <p className="mt-0.5 text-[11px] text-[#5A6670]/80">
+              {hoveredWish.title}
+            </p>
+            {hoveredWish.targetDate && (
+              <p className="mt-0.5 text-[10px] text-[#5A6670]/50">
+                期望时间: {hoveredWish.targetDate}
+              </p>
+            )}
+          </motion.div>
+        )}
       </motion.div>
+
+      {/* Flight Trajectory & Journey Replay Floating Button (hidden while playing trajectory to prevent overlapping with controller) */}
+      {timelinePointCount > 0 && !showTimeline && (
+        <div className="absolute bottom-5 right-5 z-30 sm:bottom-6 sm:right-6">
+          <TimelineToggle
+            visible={showTimeline}
+            onToggle={() => {
+              const nextState = !showTimeline;
+              setShowTimeline(nextState);
+              setZoom(nextState ? 1.35 : 1);
+            }}
+            pointCount={timelinePointCount}
+          />
+        </div>
+      )}
     </motion.div>
   );
 }

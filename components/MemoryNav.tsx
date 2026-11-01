@@ -18,6 +18,10 @@ import {
   PlaneTakeoff,
   CloudSun,
   Menu,
+  Ticket,
+  Mail,
+  Compass,
+  Trophy,
 } from "lucide-react";
 import { MobileBottomNav } from "./MobileBottomNav";
 
@@ -25,77 +29,138 @@ const githubUrl = "https://github.com/zkeyoned/map-of-us-template";
 const devUrl = "https://github.com/WyankinzZ/map-for-everyone";
 const douyinUrl = "https://www.douyin.com/user/MS4wLjABAAAAMWgaMMPGnFwsJmpKo1ha0HPQ6-ul-NEWzzMvQ9NIPYQ";
 
-export type MemoryNavKey = "map" | "memories" | "favorites" | "anniversaries" | "capsule" | "landmarks" | "loginPhotos" | "trips" | "weather" | "settings";
+export type MemoryNavKey =
+  | "map"
+  | "memories"
+  | "tickets"
+  | "postcards"
+  | "wishlist"
+  | "achievements"
+  | "favorites"
+  | "anniversaries"
+  | "capsule"
+  | "landmarks"
+  | "loginPhotos"
+  | "trips"
+  | "weather"
+  | "settings";
 
-const navItems = [
-  { key: "map", label: "地图", icon: MapIcon, href: "/map" },
-  { key: "memories", label: "回忆记录", icon: BookOpen, href: "/memories" },
-  { key: "favorites", label: "地点收藏", icon: Heart, href: "/favorites" },
-  { key: "anniversaries", label: "纪念日", icon: CalendarDays, href: "/anniversaries" },
-  { key: "trips", label: "旅行倒数", icon: PlaneTakeoff, href: "/trips" },
-  { key: "capsule", label: "时光宝盒", icon: Archive, href: "/time-capsule" },
-  { key: "landmarks", label: "地标管理", icon: MapPin, href: "/landmarks" },
-  { key: "loginPhotos", label: "登录照片", icon: ImageIcon, href: "/login-photos" },
-  { key: "weather", label: "沿途天气", icon: CloudSun, href: "/weather" },
-  { key: "settings", label: "设置", icon: Settings, href: "/settings" },
-] satisfies Array<{
-  key: MemoryNavKey;
-  label: string;
-  icon: typeof MapIcon;
-  href: string;
-}>;
+export interface NavGroup {
+  title: string;
+  items: Array<{
+    key: MemoryNavKey;
+    matchKeys?: MemoryNavKey[];
+    label: string;
+    icon: typeof MapIcon;
+    href: string;
+    badge?: string;
+  }>;
+}
+
+export const navGroups: NavGroup[] = [
+  {
+    title: "足迹与回忆",
+    items: [
+      { key: "map", label: "地图探索", icon: MapIcon, href: "/map" },
+      {
+        key: "memories",
+        matchKeys: ["memories", "tickets", "postcards"],
+        label: "回忆时光录",
+        icon: BookOpen,
+        href: "/memories",
+      },
+      { key: "achievements", label: "恋爱成就", icon: Trophy, href: "/achievements" },
+      { key: "anniversaries", label: "纪念日", icon: CalendarDays, href: "/anniversaries" },
+    ],
+  },
+  {
+    title: "未来的约定",
+    items: [
+      { key: "wishlist", label: "未来心愿", icon: Compass, href: "/wishlist" },
+      { key: "trips", label: "旅行倒数", icon: PlaneTakeoff, href: "/trips" },
+      { key: "capsule", label: "时光宝盒", icon: Archive, href: "/time-capsule" },
+    ],
+  },
+  {
+    title: "偏好与设置",
+    items: [
+      { key: "favorites", label: "地点收藏", icon: Heart, href: "/favorites" },
+      { key: "weather", label: "沿途天气", icon: CloudSun, href: "/weather" },
+      {
+        key: "settings",
+        matchKeys: ["settings", "landmarks", "loginPhotos"],
+        label: "系统设置",
+        icon: Settings,
+        href: "/settings",
+      },
+    ],
+  },
+];
 
 export function MemorySidebar({ active, className, onClose }: Readonly<{ active: MemoryNavKey; className?: string; onClose?: () => void }>) {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   return (
-    <aside className={className ?? "hidden h-[100dvh] w-[260px] shrink-0 border-r border-[#D8DDD8]/78 bg-[#FAFBF7]/78 px-5 py-8 shadow-[12px_0_34px_rgba(90,102,112,0.04)] backdrop-blur lg:flex lg:flex-col lg:overflow-y-auto lg:overscroll-contain lg:touch-pan-y"}>
-      <div className="flex-1">
-        <div className="text-center">
-          <div className="mx-auto grid h-14 w-14 place-items-center">
-            <Heart className="h-10 w-10 fill-[#F5DCE0] text-[#E8B8C2]" />
+    <aside className={className ?? "hidden h-[100dvh] w-[240px] shrink-0 border-r border-[#D8DDD8]/78 bg-[#FAFBF7]/85 px-3.5 py-6 shadow-[10px_0_30px_rgba(90,102,112,0.035)] backdrop-blur lg:flex lg:flex-col justify-between"}>
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* Brand Header */}
+        <div className="text-center pb-2 border-b border-[#D8DDD8]/40">
+          <div className="mx-auto grid h-10 w-10 place-items-center">
+            <Heart className="h-7 w-7 fill-[#F5DCE0] text-[#E8B8C2]" />
           </div>
-          <p className="mt-2 text-lg font-semibold text-[#5A6670]">我们的地图</p>
-          <p className="mt-1 text-xs text-[#5A6670]/52">只属于两个人的回忆</p>
+          <p className="mt-1 text-base font-bold text-[#5A6670]">Map For Love</p>
+          <p className="text-[11px] text-[#5A6670]/50">只属于两个人的回忆</p>
         </div>
 
-        <nav className="mt-10 space-y-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const selected = item.key === active;
+        {/* Grouped Nav Items */}
+        <nav className="mt-3 flex-1 space-y-3 overflow-y-auto no-scrollbar">
+          {navGroups.map((group) => (
+            <div key={group.title} className="space-y-0.5">
+              <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#5A6670]/40">
+                {group.title}
+              </p>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isSelected =
+                  item.key === active || (item.matchKeys && item.matchKeys.includes(active));
 
-            return (
-              <Link
-                key={item.key}
-                onClick={onClose}
-                className={`flex w-full items-center gap-3 rounded-[8px] border px-4 py-3 text-sm font-medium transition ${selected
-                  ? "border-[#F5DCE0] bg-[#F5DCE0]/52 text-[#E8B8C2]"
-                  : "border-transparent text-[#5A6670]/72 hover:border-[#D8DDD8] hover:bg-[#FAFBF7]"
-                  }`}
-                href={item.href}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+                return (
+                  <Link
+                    key={item.key}
+                    onClick={onClose}
+                    className={`flex w-full items-center gap-2.5 rounded-[7px] px-3 py-2 text-xs font-semibold transition ${
+                      isSelected
+                        ? "border border-[#F5DCE0] bg-[#F5DCE0]/60 text-[#D86F82] shadow-xs"
+                        : "border border-transparent text-[#5A6670]/72 hover:border-[#D8DDD8]/80 hover:bg-white/80 hover:text-[#5A6670]"
+                    }`}
+                    href={item.href}
+                  >
+                    <Icon className={`h-3.5 w-3.5 ${isSelected ? "text-[#D86F82]" : "text-[#5A6670]/60"}`} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        <div className="mt-10 rounded-[8px] border border-[#D8DDD8]/72 bg-[#FAFBF7]/72 p-4 text-sm leading-7 text-[#5A6670]/62 shadow-[0_12px_26px_rgba(90,102,112,0.05)]">
-          在地图的每个角落，都有我们一起走过的故事
-          <Heart className="ml-1 inline h-3.5 w-3.5 fill-[#F5DCE0] text-[#E8B8C2]" />
+        {/* Love Footer Quote */}
+        <div className="mt-3 rounded-[8px] border border-[#F5DCE0]/60 bg-[#FFFDF9]/80 p-2.5 text-center text-[11px] leading-relaxed text-[#5A6670]/70">
+          地图的每个角落，都是爱的故事
+          <Heart className="ml-1 inline h-3 w-3 fill-[#F5DCE0] text-[#E8B8C2]" />
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-3 pt-2 border-t border-[#D8DDD8]/40">
         <button
           onClick={() => setIsAboutOpen(true)}
-          className="flex w-full items-center justify-between rounded-[8px] border border-[#D8DDD8]/72 bg-[#FAFBF7]/72 px-4 py-3 text-sm font-medium text-[#5A6670]/72 transition hover:border-[#D8DDD8] hover:bg-white"
+          className="flex w-full items-center justify-between rounded-[7px] border border-[#D8DDD8]/60 bg-white/70 px-3 py-1.5 text-xs font-medium text-[#5A6670]/60 transition hover:border-[#D8DDD8] hover:text-[#5A6670]"
         >
-          <div className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-[#A8C8DC]" />
+          <div className="flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5 text-[#A8C8DC]" />
             关于这份地图
           </div>
+          <span className="text-[10px] text-[#5A6670]/40">v0.1</span>
         </button>
       </div>
 
@@ -205,15 +270,24 @@ export function MemoryPageShell({
       <span className="absolute left-[38%] top-[9%] h-2 w-2 bg-[#F5DCE0]" aria-hidden="true" />
       <span className="absolute right-[17%] top-[15%] h-2 w-2 bg-[#D6E8F0]" aria-hidden="true" />
       
-      <div className="relative z-10 flex h-14 shrink-0 items-center justify-between border-b border-[#D8DDD8]/78 bg-[#FAFBF7]/90 px-4 backdrop-blur lg:hidden">
-        <div className="flex items-center gap-2">
-          <Heart className="h-5 w-5 fill-[#F5DCE0] text-[#E8B8C2]" />
-          <span className="font-semibold text-[#5A6670]">我们的地图</span>
-        </div>
-        <button onClick={() => setIsMobileNavOpen(true)} className="p-2">
-          <Menu className="h-5 w-5 text-[#5A6670]" />
+      {/* Fixed mobile top header (compact & slim to prevent blocking content) */}
+      <div className="fixed top-0 left-0 right-0 z-[100] flex h-10 items-center justify-between border-b border-[#D8DDD8]/78 bg-[#FAFBF7]/95 px-3.5 shadow-2xs backdrop-blur-md lg:hidden">
+        <Link href="/map" className="flex items-center gap-1.5 transition hover:opacity-80 active:scale-95">
+          <Heart className="h-4 w-4 fill-[#F5DCE0] text-[#E8B8C2]" />
+          <span className="text-[13px] font-semibold text-[#5A6670]">Map For Love</span>
+        </Link>
+        <button
+          type="button"
+          onClick={() => setIsMobileNavOpen(true)}
+          className="rounded-full p-1.5 text-[#5A6670] transition hover:bg-[#F5DCE0]/40 hover:text-[#E8B8C2] active:scale-95"
+          aria-label="打开导航菜单"
+        >
+          <Menu className="h-4.5 w-4.5" />
         </button>
       </div>
+
+      {/* Layout spacer for fixed mobile top header */}
+      <div className="h-10 shrink-0 lg:hidden" aria-hidden="true" />
 
       <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
         <MemorySidebar active={active} />
@@ -237,7 +311,7 @@ export function MemoryPageShell({
               >
                 <MemorySidebar 
                   active={active} 
-                  className="flex h-full w-[260px] shrink-0 flex-col overflow-y-auto overscroll-contain touch-pan-y border-r border-[#D8DDD8]/78 bg-[#FAFBF7] px-5 py-8" 
+                  className="flex h-full w-[240px] shrink-0 flex-col overflow-y-auto overscroll-contain touch-pan-y border-r border-[#D8DDD8]/78 bg-[#FAFBF7] px-3.5 py-6" 
                   onClose={() => setIsMobileNavOpen(false)} 
                 />
               </motion.div>
@@ -245,7 +319,7 @@ export function MemoryPageShell({
           )}
         </AnimatePresence>
 
-        <section className="min-w-0 flex-1 overflow-y-auto px-4 pt-6 pb-24 sm:px-10 lg:py-8">{children}</section>
+        <section className="min-w-0 flex-1 overflow-y-auto px-3.5 pt-4 pb-24 sm:px-10 lg:py-8">{children}</section>
       </div>
       <MobileBottomNav />
     </main>

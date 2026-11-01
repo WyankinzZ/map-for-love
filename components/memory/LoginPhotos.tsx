@@ -22,6 +22,7 @@ import {
 } from '@/data/loginPhotoStore';
 import { LocalPrivacyImage } from '@/components/LocalPrivacyImage';
 import { loginPhotoSlots } from './Shared';
+import { scrollToPageTop } from '@/lib/client/scroll';
 
 export default function LoginPhotosPage() {
   const isAdmin = useAdminMode();
@@ -30,6 +31,14 @@ export default function LoginPhotosPage() {
   const [status, setStatus] = useState("");
   const [isWorking, setIsWorking] = useState(false);
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const ITEMS_PER_PAGE = 3;
+  const totalPages = Math.ceil(loginPhotoSlots.length / ITEMS_PER_PAGE);
+  const paginatedSlots = loginPhotoSlots.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -148,7 +157,7 @@ export default function LoginPhotosPage() {
 
       <section className="mt-10">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {loginPhotoSlots.map((slot) => {
+          {paginatedSlots.map((slot) => {
             const customPhoto = loginPhotos[slot.id];
             const customText = appSettings.loginPhotoTexts?.[slot.id];
             const src = customPhoto ?? slot.fallback;
@@ -188,6 +197,64 @@ export default function LoginPhotosPage() {
             );
           })}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#D8DDD8]/40 pt-6">
+            <span className="text-xs font-medium text-[#5A6670]/60">
+              共 {loginPhotoSlots.length} 张登录背景 · 第 {currentPage} / {totalPages} 页
+            </span>
+
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                  scrollToPageTop();
+                }}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 rounded-[8px] border border-[#D8DDD8] bg-white px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-[#5A6670] transition hover:border-[#E8B8C2] hover:text-[#E8B8C2] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0 whitespace-nowrap"
+              >
+                上一页
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }).map((_, i) => {
+                  const pageNum = i + 1;
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => {
+                        setCurrentPage(pageNum);
+                        scrollToPageTop();
+                      }}
+                      className={`h-7 min-w-[28px] sm:min-w-[32px] px-1.5 rounded-[8px] text-xs font-semibold transition cursor-pointer ${
+                        currentPage === pageNum
+                          ? "bg-[#E8B8C2] text-white shadow-xs"
+                          : "border border-[#D8DDD8] bg-white text-[#5A6670] hover:border-[#E8B8C2]"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentPage((p) => Math.min(totalPages, p + 1));
+                  scrollToPageTop();
+                }}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 rounded-[8px] border border-[#D8DDD8] bg-white px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-[#5A6670] transition hover:border-[#E8B8C2] hover:text-[#E8B8C2] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0 whitespace-nowrap"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       <AnimatePresence>
@@ -234,7 +301,7 @@ export default function LoginPhotosPage() {
                           <input
                             className="hidden"
                             type="file"
-                            accept="image/*"
+                            accept="image/*,.heic,.heif,.HEIC,.HEIF"
                             onChange={(event) => updateLoginPhoto(slot.id, event)}
                             disabled={isWorking || !isAdmin}
                           />

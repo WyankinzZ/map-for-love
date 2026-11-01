@@ -9,6 +9,7 @@ import { spring } from '@/components/province/Shared';
 import { useAdminMode } from '@/hooks/useAdminMode';
 import { CitySearchSelect } from '@/components/shared/CitySearchSelect';
 import { type ToolConfig, type StoredItem, readItems, writeItems, daysUntil } from './Shared';
+import { scrollToPageTop } from '@/lib/client/scroll';
 
 export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig }>) {
   const Icon = config.icon;
@@ -30,6 +31,10 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
 
     return () => window.clearTimeout(timer);
   }, [config.storageKey]);
+
+  useEffect(() => {
+    scrollToPageTop();
+  }, [currentPage]);
 
   const canSave = title.trim().length > 0;
 
@@ -89,20 +94,20 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
 
   return (
     <MemoryPageShell active={config.active}>
-      <header className="flex flex-wrap items-start justify-between gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <Icon className="h-8 w-8 fill-[#F5DCE0] text-[#E8B8C2]" />
-            <h1 className="text-[34px] font-semibold leading-tight text-[#5A6670]">{config.title}</h1>
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <Icon className="h-6 w-6 sm:h-8 sm:w-8 fill-[#F5DCE0] text-[#E8B8C2]" />
+            <h1 className="text-2xl sm:text-[34px] font-semibold leading-tight text-[#5A6670]">{config.title}</h1>
           </div>
-          <p className="mt-2 text-sm font-medium text-[#5A6670]/58">{config.subtitle}</p>
+          <p className="mt-1 text-xs sm:text-sm font-medium text-[#5A6670]/58">{config.subtitle}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="rounded-[8px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/72 px-4 py-2 text-sm font-semibold text-[#5A6670]/62 shadow-[0_8px_24px_rgba(90,102,112,0.08)] backdrop-blur">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="rounded-[8px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/72 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-[#5A6670]/62 shadow-[0_8px_24px_rgba(90,102,112,0.08)] backdrop-blur">
             {items.length} 条
           </div>
           <button
-            className="flex items-center gap-1.5 rounded-[8px] bg-[#E8B8C2] px-4 py-2.5 text-sm font-semibold text-[#FAFBF7] shadow-[0_6px_14px_rgba(232,184,194,0.32)] transition hover:bg-[#D6A6B0] disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-[8px] bg-[#E8B8C2] px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-semibold text-[#FAFBF7] shadow-[0_6px_14px_rgba(232,184,194,0.32)] transition hover:bg-[#D6A6B0] disabled:opacity-50"
             onClick={() => {
               if (isFormOpen && editingId) {
                 resetForm();
@@ -124,7 +129,7 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-lg rounded-[16px] bg-white p-7 shadow-[0_20px_60px_rgba(90,102,112,0.12)]"
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[16px] bg-white p-5 sm:p-7 shadow-[0_20px_60px_rgba(90,102,112,0.12)]"
             >
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-[#5A6670]">{editingId ? "编辑记录" : "新增记录"}</h2>
@@ -209,7 +214,7 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
         )}
       </AnimatePresence>
 
-      <section className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+      <section className="mt-6 sm:mt-10 grid gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3">
         {paginatedItems.map((item) => {
           const city = cities.find((candidate) => candidate.id === item.cityId);
           const leftDays = daysUntil(item.date);
@@ -217,19 +222,19 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
           return (
             <article
               key={item.id}
-              className="group relative flex flex-col overflow-hidden rounded-[12px] border border-[#D8DDD8]/70 bg-gradient-to-br from-[#FAFBF7]/80 to-white/60 p-6 shadow-sm transition-all hover:shadow-[0_16px_36px_rgba(90,102,112,0.08)] backdrop-blur"
+              className="group relative flex flex-col overflow-hidden rounded-[12px] border border-[#D8DDD8]/70 bg-gradient-to-br from-[#FAFBF7]/80 to-white/60 p-4 sm:p-6 shadow-sm transition-all hover:shadow-[0_16px_36px_rgba(90,102,112,0.08)] backdrop-blur"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-lg font-semibold text-[#5A6670]">{item.title}</h2>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    {city && <p className="text-sm font-medium text-[#A8C8DC]">{city.name}</p>}
-                    {item.date && <p className="text-sm text-[#5A6670]/54">{item.date}</p>}
+                  <h2 className="truncate text-base sm:text-lg font-semibold text-[#5A6670]">{item.title}</h2>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {city && <p className="text-xs sm:text-sm font-medium text-[#A8C8DC]">{city.name}</p>}
+                    {item.date && <p className="text-xs sm:text-sm text-[#5A6670]/54">{item.date}</p>}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <div className="flex shrink-0 items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
                   <button
-                    className="grid h-8 w-8 place-items-center rounded-[6px] text-[#5A6670]/42 transition hover:bg-[#D6E8F0]/34 hover:text-[#A8C8DC]"
+                    className="grid h-8 w-8 place-items-center rounded-[6px] text-[#5A6670]/60 sm:text-[#5A6670]/42 transition hover:bg-[#D6E8F0]/34 hover:text-[#A8C8DC]"
                     type="button"
                     onClick={() => startEdit(item)}
                     aria-label="编辑"
@@ -238,7 +243,7 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    className="grid h-8 w-8 place-items-center rounded-[6px] text-[#5A6670]/42 transition hover:bg-[#F5DCE0]/45 hover:text-[#E8B8C2]"
+                    className="grid h-8 w-8 place-items-center rounded-[6px] text-[#5A6670]/60 sm:text-[#5A6670]/42 transition hover:bg-[#F5DCE0]/45 hover:text-[#E8B8C2]"
                     type="button"
                     onClick={() => remove(item.id)}
                     aria-label="删除"
@@ -274,9 +279,12 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
         <div className="mt-10 flex items-center justify-center gap-2">
           <button
             type="button"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onClick={() => {
+              setCurrentPage((p) => Math.max(1, p - 1));
+              scrollToPageTop();
+            }}
             disabled={currentPage === 1}
-            className="rounded-[8px] border border-[#D8DDD8] px-4 py-2 text-sm text-[#5A6670]/70 transition hover:bg-white disabled:opacity-30"
+            className="rounded-[8px] border border-[#D8DDD8] px-4 py-2 text-sm text-[#5A6670]/70 transition hover:bg-white disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
           >
             上一页
           </button>
@@ -285,9 +293,12 @@ export default function MemoryToolPage({ config }: Readonly<{ config: ToolConfig
           </span>
           <button
             type="button"
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => {
+              setCurrentPage((p) => Math.min(totalPages, p + 1));
+              scrollToPageTop();
+            }}
             disabled={currentPage === totalPages}
-            className="rounded-[8px] border border-[#D8DDD8] px-4 py-2 text-sm text-[#5A6670]/70 transition hover:bg-white disabled:opacity-30"
+            className="rounded-[8px] border border-[#D8DDD8] px-4 py-2 text-sm text-[#5A6670]/70 transition hover:bg-white disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
           >
             下一页
           </button>

@@ -29,6 +29,16 @@ self.addEventListener("fetch", (event) => {
 
   if (request.method !== "GET") return;
 
+  // Never intercept or cache Next.js internal routes, Turbopack HMR, or RSC streaming requests
+  if (
+    request.url.includes("/_next/") ||
+    request.url.includes("__turbopack") ||
+    request.url.includes("_rsc=") ||
+    request.headers.get("accept")?.includes("text/x-component")
+  ) {
+    return;
+  }
+
   if (request.url.includes("/api/")) {
     event.respondWith(
       fetch(request).catch(() => caches.match(request))

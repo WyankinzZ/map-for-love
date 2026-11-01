@@ -10,6 +10,7 @@ import {
   writeJsonValue,
 } from "@/lib/server/supabase";
 import { uploadImageWithFallback, uploadImagesConcurrent } from "@/lib/server/oss";
+import { migrateMemoriesBase64ToLocal } from "@/lib/server/localUploads";
 import { isLocalPrivacyRequest, localPrivacyImagePlaceholder } from "@/lib/localPrivacy";
 import { requireAdminSession, requireSiteSession } from "@/lib/server/auth";
 import { getBundledDataFilePath, getPrivateDataFilePath } from "@/lib/server/dataDir";
@@ -59,6 +60,7 @@ const isAllowedImage = (value: string) =>
   value.length <= imageMaxLength &&
   (value.startsWith("/photos/") ||
     value.startsWith("/sprites/") ||
+    value.startsWith("/api/uploads/") ||
     value.startsWith("https://") ||
     value.startsWith("data:image/"));
 
@@ -123,7 +125,15 @@ async function readMemoryStore(): Promise<MemoryStore> {
     const file = await readFile(memoryStorePath, "utf8");
     const parsed = JSON.parse(file) as unknown;
 
-    return isRecord(parsed) ? normalizeMemoryStore(parsed as RawMemoryStore) : {};
+    const store = isRecord(parsed) ? normalizeMemoryStore(parsed as RawMemoryStore) : {};
+    if (file.includes("data:image/")) {
+      const { store: migratedStore, hasMigrated } = await migrateMemoriesBase64ToLocal(store);
+      if (hasMigrated) {
+        await writeMemoryStore(migratedStore).catch(() => {});
+        return migratedStore;
+      }
+    }
+    return store;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }

@@ -42,7 +42,12 @@ function MemoryThumb({ memory }: Readonly<{ memory: Memory }>) {
 
   if (isBrowserImageUrl(memory.image)) {
     return (
-      <LocalPrivacyImg className={className} src={memory.image} alt={`${memory.city} memory`} />
+      <LocalPrivacyImg
+        className={className}
+        src={memory.image}
+        fallbackSrc="/sprites/icons/city-dot.svg"
+        alt={`${memory.city} memory`}
+      />
     );
   }
 

@@ -78,6 +78,10 @@ export function PasswordSection({
           <span className="text-xs font-semibold text-[#5A6670]/48">进入密码（你们在一起的日期，如 1223）</span>
           <div className="flex gap-2">
             <input
+              id="entryPassword"
+              name="entryPassword"
+              type="text"
+              autoComplete="off"
               className="min-h-10 w-full rounded-[7px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/70 px-3 text-sm text-[#5A6670] outline-none transition focus:border-[#A8C8DC] focus:bg-white disabled:opacity-50"
               value={newEntryPassword}
               onChange={(event) => setNewEntryPassword(event.target.value.replace(/\D/g, "").slice(0, 8))}
@@ -100,10 +104,13 @@ export function PasswordSection({
           <span className="text-xs font-semibold text-[#5A6670]/48">管理员密码（自己设置）</span>
           <div className="flex gap-2">
             <input
+              id="adminPassword"
+              name="adminPassword"
+              type="password"
+              autoComplete="new-password"
               className="min-h-10 w-full rounded-[7px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/70 px-3 text-sm text-[#5A6670] outline-none transition focus:border-[#A8C8DC] focus:bg-white disabled:opacity-50"
               value={newAdminPassword}
               onChange={(event) => setNewAdminPassword(event.target.value)}
-              type="password"
               placeholder="新的管理员密码"
               disabled={!isAdmin}
             />

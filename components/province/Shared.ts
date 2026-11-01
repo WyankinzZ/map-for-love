@@ -1,6 +1,7 @@
 import { type Memory } from "@/data/memories";
 import { type LocalMemoryStore, memoryStoreUpdatedEvent } from "@/data/progress";
 import { writeAdminMode } from "@/data/adminMode";
+import { isMobileStaticApp } from "@/lib/client/idb";
 import {
   readMemories as readMemoriesFromStorage,
   writeMemories as writeMemoriesToStorage,
@@ -108,7 +109,8 @@ export async function memoryApiCall(
   method: string,
   body: Record<string, unknown>,
 ): Promise<MemoryApiResponse> {
-  if (getStorageMode() === "oss") {
+  // If in OSS mode or mobile static app (APK), operate on local client storage directly
+  if (getStorageMode() === "oss" || isMobileStaticApp()) {
     try {
       if (method === "POST") {
         const memory = body.memory as Memory;
@@ -116,8 +118,14 @@ export async function memoryApiCall(
         return result;
       }
       if (method === "PATCH") {
-        const { cityId, memoryId, memory } = body as { cityId: string; memoryId: string; memory: Record<string, unknown> };
-        const result = await updateMemoryInStorage(cityId, memoryId, memory);
+        const { cityId, memoryId, memory, coverImage } = body as {
+          cityId: string;
+          memoryId: string;
+          memory?: Record<string, unknown>;
+          coverImage?: string;
+        };
+        const patchData = coverImage ? { image: coverImage } : (memory || {});
+        const result = await updateMemoryInStorage(cityId, memoryId, patchData);
         return result;
       }
       if (method === "DELETE") {
@@ -130,25 +138,58 @@ export async function memoryApiCall(
         await writeMemoriesToStorage(memories);
         return { memories };
       }
-    } catch {
-      throw new Error("Failed");
+    } catch (err) {
+      console.error("[memoryApiCall] Storage operation failed:", err);
+      throw err;
     }
     throw new Error("Failed");
   }
 
-  const response = await fetch("/api/memories", {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  // Try API call for desktop/server mode
+  try {
+    const response = await fetch("/api/memories", {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-  if (response.status === 401 || response.status === 403) {
-    writeAdminMode(false);
-    throw new Error("Admin session expired");
+    if (response.status === 401 || response.status === 403) {
+      writeAdminMode(false);
+      throw new Error("Admin session expired");
+    }
+    if (response.ok) {
+      return response.json();
+    }
+  } catch (err) {
+    console.warn("[memoryApiCall] API unavailable, falling back to local storage:", err);
   }
-  if (!response.ok) throw new Error("Failed");
 
-  return response.json();
+  // Fallback to local storage (offline/static fallback)
+  if (method === "POST") {
+    const memory = body.memory as Memory;
+    return await saveMemoryToStorage(memory.cityId, memory);
+  }
+  if (method === "PATCH") {
+    const { cityId, memoryId, memory, coverImage } = body as {
+      cityId: string;
+      memoryId: string;
+      memory?: Record<string, unknown>;
+      coverImage?: string;
+    };
+    const patchData = coverImage ? { image: coverImage } : (memory || {});
+    return await updateMemoryInStorage(cityId, memoryId, patchData);
+  }
+  if (method === "DELETE") {
+    const { cityId, memoryId } = body as { cityId: string; memoryId: string };
+    return await deleteMemoryFromStorage(cityId, memoryId);
+  }
+  if (method === "PUT") {
+    const memories = body.memories as LocalMemoryStore;
+    await writeMemoriesToStorage(memories);
+    return { memories };
+  }
+
+  throw new Error("Failed");
 }
 
 export function dispatchMemoryUpdate(memories: LocalMemoryStore) {

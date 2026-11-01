@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { Minus, Plus, RotateCcw, List, X } from "lucide-react";
 import { type City, getCitiesByProvince, cityFallbackSprite } from "@/data/cities";
@@ -11,13 +12,14 @@ import { useAdminMode } from "@/hooks/useAdminMode";
 import { makeProjectionForProvince, makePath, chinaFeatures, provinceIdOf } from "@/lib/geo";
 import { readCityAssets } from "@/lib/client/storage";
 import { 
-  type MapCamera, type DragState, type CityAssetStore, type CardAnchor,
+  type MapCamera, type CityAssetStore, type CardAnchor,
   colors, spring, memoryCardWidth, memoryCardGap, memoryCardMaxHeight, cityListPanelWidth,
   revokeObjectUrl, clampZoom, stableCoordinate,
   memoryApiCall, dispatchMemoryUpdate, fetchMemoriesDeduplicated
 } from "./province/Shared";
 import CityPanel from "./province/CityPanel";
 import { LocalPrivacyImg } from "@/components/LocalPrivacyImage";
+import { isMobileStaticApp } from "@/lib/client/idb";
 
 
 interface ProvinceMapProps {
@@ -167,21 +169,25 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
   const isAdmin = useAdminMode();
   const frameRef = useRef<HTMLDivElement>(null);
   const nudgeTimeoutRef = useRef<number | null>(null);
-  const pinchRef = useRef<{ dist: number }>({ dist: 0 });
   const localMemoriesRef = useRef<LocalMemoryStore>({});
   const cameraRef = useRef<MapCamera>({ scale: 1, x: 0, y: 0 });
-  const dragStateRef = useRef<DragState | null>(null);
-  const dragMovedRef = useRef(false);
-  const activePointersRef = useRef(0);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [nudgedCityId, setNudgedCityId] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [frameScale, setFrameScale] = useState(1);
   const [localMemories, setLocalMemories] = useState<LocalMemoryStore>({});
   const [isLoading, setIsLoading] = useState(true);
   const [cityAssets, setCityAssets] = useState<CityAssetStore>({});
   const [camera, setCameraState] = useState<MapCamera>({ scale: 1, x: 0, y: 0 });
   const [isCityListOpen, setIsCityListOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== "undefined" && window.innerWidth >= 1280) {
+      setIsCityListOpen(true);
+    }
+  }, []);
+
   const provinceCities = useMemo(() => getCitiesByProvince(province.id), [province.id]);
   const litCityIds = useMemo(() => getLitCityIds(localMemories), [localMemories]);
   const selectedCity = provinceCities.find((city) => city.id === selectedCityId) ?? null;
@@ -336,50 +342,43 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
     setLocalMemories(memories);
   };
 
+  const isEffectiveAdmin = isAdmin || isMobileStaticApp();
+
   const handleSaveMemory = async (cityId: string, memory: Memory) => {
-    if (!isAdmin) throw new Error("Admin mode required");
+    if (!isEffectiveAdmin) throw new Error("Admin mode required");
     const data = await memoryApiCall("POST", { memory });
     updateLocalMemories(data.memories);
     dispatchMemoryUpdate(data.memories);
   };
 
   const handleSetMemoryCover = async (cityId: string, memoryId: string, coverImage: string) => {
-    if (!isAdmin) throw new Error("Admin mode required");
+    if (!isEffectiveAdmin) throw new Error("Admin mode required");
     const data = await memoryApiCall("PATCH", { cityId, memoryId, coverImage });
     updateLocalMemories(data.memories);
     dispatchMemoryUpdate(data.memories);
   };
 
   const handleUpdateMemory = async (cityId: string, memoryId: string, memory: Memory) => {
-    if (!isAdmin) throw new Error("Admin mode required");
+    if (!isEffectiveAdmin) throw new Error("Admin mode required");
     const data = await memoryApiCall("PATCH", { cityId, memoryId, memory });
     updateLocalMemories(data.memories);
     dispatchMemoryUpdate(data.memories);
   };
 
   const handleDeleteMemory = async (cityId: string, memoryId: string) => {
-    if (!isAdmin) throw new Error("Admin mode required");
+    if (!isEffectiveAdmin) throw new Error("Admin mode required");
     const data = await memoryApiCall("DELETE", { cityId, memoryId });
     updateLocalMemories(data.memories);
     window.dispatchEvent(new CustomEvent(memoryStoreUpdatedEvent));
   };
 
   const focusCity = (city: Pick<City, "id" | "lng" | "lat">) => {
-    const point = mapData.cities.find((candidate) => candidate.id === city.id);
-    if (!point) return;
-
-    const scale = clampZoom(Math.max(cameraRef.current.scale, 1.62));
-    setCamera({
-      scale,
-      x: width / 2 - point.x * scale - 150,
-      y: height / 2 - point.y * scale + 12,
-    });
+    setSelectedCityId(city.id);
   };
 
   const handleSelectCity = (cityId: string, lit: boolean) => {
     const city = provinceCities.find((candidate) => candidate.id === cityId);
     setSelectedCityId(cityId);
-    setIsCityListOpen(false);
     if (city) focusCity(city);
     if (!lit) {
       setNudgedCityId(cityId);
@@ -388,9 +387,34 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
     }
   };
 
+  const zoomIn = () => {
+    setCamera((current) => ({
+      scale: clampZoom(current.scale * 1.15),
+      x: 0,
+      y: 0,
+    }));
+  };
+
+  const zoomOut = () => {
+    setCamera((current) => ({
+      scale: clampZoom(current.scale * 0.85),
+      x: 0,
+      y: 0,
+    }));
+  };
+
   const resetCamera = () => {
     setSelectedCityId(null);
     setCamera({ scale: 1, x: 0, y: 0 });
+  };
+
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const factor = event.deltaY < 0 ? 1.08 : 0.92;
+    setCamera((current) => ({
+      scale: clampZoom(current.scale * factor),
+      x: 0,
+      y: 0,
+    }));
   };
 
   useEffect(() => {
@@ -408,155 +432,17 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapData.cities, provinceCities]);
 
-  const zoomAt = (clientX: number, clientY: number, delta: number) => {
-    const frame = frameRef.current;
-    if (!frame) return;
-
-    const rect = frame.getBoundingClientRect();
-    const pointerX = (clientX - rect.left) / frameScale;
-    const pointerY = (clientY - rect.top) / frameScale;
-
-    setCamera((current) => {
-      const nextScale = clampZoom(current.scale * delta);
-      const mapX = (pointerX - current.x) / current.scale;
-      const mapY = (pointerY - current.y) / current.scale;
-
-      return {
-        scale: nextScale,
-        x: pointerX - mapX * nextScale,
-        y: pointerY - mapY * nextScale,
-      };
-    });
-  };
-
-  const zoomFromCenter = (delta: number) => {
-    const frame = frameRef.current;
-    const rect = frame?.getBoundingClientRect();
-    const centerX = rect ? rect.left + rect.width / 2 : 0;
-    const centerY = rect ? rect.top + rect.height / 2 : 0;
-
-    zoomAt(centerX, centerY, delta);
-  };
-
-  const panAndZoom = (clientX: number, clientY: number, zoomDelta: number, panDx: number, panDy: number) => {
-    const frame = frameRef.current;
-    if (!frame) return;
-
-    const rect = frame.getBoundingClientRect();
-    const pointerX = (clientX - rect.left) / frameScale;
-    const pointerY = (clientY - rect.top) / frameScale;
-
-    setCamera((current) => {
-      const panX = current.x + panDx;
-      const panY = current.y + panDy;
-
-      const nextScale = clampZoom(current.scale * zoomDelta);
-      const mapX = (pointerX - panX) / current.scale;
-      const mapY = (pointerY - panY) / current.scale;
-
-      return {
-        scale: nextScale,
-        x: pointerX - mapX * nextScale,
-        y: pointerY - mapY * nextScale,
-      };
-    });
-  };
-
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    // Note: wheel events in React are passive, so preventDefault is ignored.
-    const delta = event.deltaY < 0 ? 1.12 : 0.88;
-    zoomAt(event.clientX, event.clientY, delta);
-  };
-
-  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    activePointersRef.current++;
-    if (activePointersRef.current > 1) {
-      dragStateRef.current = null;
-      setDragging(false);
-      return;
-    }
-
-    const target = event.target as HTMLElement;
-    if (target.closest("button, article, aside")) return;
-
-    dragMovedRef.current = false;
-    dragStateRef.current = {
-      pointerId: event.pointerId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      startCamera: cameraRef.current,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDragging(true);
-  };
-
-  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (activePointersRef.current > 1) return;
-
-    const dragState = dragStateRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-
-    const dx = (event.clientX - dragState.startClientX) / frameScale;
-    const dy = (event.clientY - dragState.startClientY) / frameScale;
-
-    if (Math.abs(dx) + Math.abs(dy) > 3) dragMovedRef.current = true;
-
-    setCamera({
-      ...dragState.startCamera,
-      x: dragState.startCamera.x + dx,
-      y: dragState.startCamera.y + dy,
-    });
-  };
-
-  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    activePointersRef.current = Math.max(0, activePointersRef.current - 1);
-    if (dragStateRef.current?.pointerId === event.pointerId) {
-      dragStateRef.current = null;
-      setDragging(false);
-    }
-  };
-
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
       ref={frameRef}
-      className={`relative mx-auto aspect-[1120/760] w-[min(100%,1120px)] touch-none overflow-visible ${
-        dragging ? "cursor-grabbing" : "cursor-grab"
-      }`}
+      className="relative mx-auto aspect-[1120/760] w-[min(100%,1120px)] overflow-visible cursor-default select-none"
       onWheel={handleWheel}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
       onClick={(event) => {
-        if (dragMovedRef.current) {
-          dragMovedRef.current = false;
-          return;
-        }
         const target = event.target as HTMLElement;
         if (!target.closest("button, article")) setSelectedCityId(null);
-      }}
-      onTouchStart={(e) => {
-        if (e.touches.length === 2) {
-          const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-          const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-          const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-          pinchRef.current = { dist, cx, cy } as any;
-        }
-      }}
-      onTouchMove={(e) => {
-        if (e.touches.length === 2) {
-          const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-          const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-          const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-          
-          const delta = dist / pinchRef.current.dist;
-          const dx = (cx - (pinchRef.current as any).cx) / frameScale;
-          const dy = (cy - (pinchRef.current as any).cy) / frameScale;
-
-          pinchRef.current = { dist, cx, cy } as any;
-          
-          panAndZoom(cx, cy, delta, dx, dy);
-        }
       }}
     >
       <div
@@ -571,7 +457,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
         <motion.div
           className="absolute left-0 top-0 origin-top-left"
           animate={{ scale: camera.scale, x: camera.x, y: camera.y }}
-          transition={dragging ? { type: "tween", duration: 0 } : spring}
+          transition={spring}
           style={{
             width,
             height,
@@ -648,112 +534,147 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
         </motion.div>
       </div>
 
-      <motion.div
-        drag
-        dragMomentum={false}
-        style={{ touchAction: "none" }}
-        className="absolute right-4 bottom-8 z-40 flex flex-col items-center gap-1.5 rounded-[8px] border border-[#D8DDD8]/85 bg-[#FAFBF7]/86 p-1.5 shadow-[0_10px_28px_rgba(90,102,112,0.08)] backdrop-blur cursor-grab active:cursor-grabbing"
-        onClick={(event) => event.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <button
-          className="grid h-8 w-8 place-items-center rounded-[7px] text-[#5A6670] transition hover:bg-[#F5DCE0]/55"
-          type="button"
-          onClick={() => zoomFromCenter(1.12)}
-          aria-label="放大地图"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-        <span className="py-0.5 text-center text-[10px] font-semibold text-[#5A6670]/70">
-          {Math.round(camera.scale * 100)}%
-        </span>
-        <button
-          className="grid h-8 w-8 place-items-center rounded-[7px] text-[#5A6670] transition hover:bg-[#D6E8F0]/45"
-          type="button"
-          onClick={() => zoomFromCenter(0.88)}
-          aria-label="缩小地图"
-        >
-          <Minus className="h-4 w-4" />
-        </button>
-        <button
-          className="mt-1 grid h-7 w-7 place-items-center rounded-[6px] text-[#5A6670]/70 transition hover:bg-[#D4E8D0]/55 hover:text-[#5A6670]"
-          type="button"
-          onClick={resetCamera}
-          aria-label="重置地图视角"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-        </button>
-      </motion.div>
+      {/* Viewport-docked Zoom & Reset Controller */}
+      {isMounted &&
+        createPortal(
+          <div
+            className="fixed bottom-4 right-3 sm:bottom-8 sm:right-9 z-40 flex flex-col items-center gap-1 rounded-[10px] border border-[#D8DDD8]/85 bg-[#FAFBF7]/90 p-1.5 shadow-[0_12px_28px_rgba(90,102,112,0.12)] backdrop-blur-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="grid h-8 w-8 place-items-center rounded-[7px] text-[#5A6670] transition hover:bg-[#F5DCE0]/55 hover:text-[#D86F82]"
+              type="button"
+              onClick={zoomIn}
+              aria-label="放大地图"
+              title="放大地图"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <span className="py-0.5 text-center text-[10px] font-bold text-[#5A6670]/70 select-none">
+              {Math.round(camera.scale * 100)}%
+            </span>
+            <button
+              className="grid h-8 w-8 place-items-center rounded-[7px] text-[#5A6670] transition hover:bg-[#D6E8F0]/45 hover:text-[#5A6670]"
+              type="button"
+              onClick={zoomOut}
+              aria-label="缩小地图"
+              title="缩小地图"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <button
+              className="mt-1 grid h-7 w-7 place-items-center rounded-[6px] text-[#5A6670]/60 transition hover:bg-[#D4E8D0]/55 hover:text-[#5A6670]"
+              type="button"
+              onClick={resetCamera}
+              aria-label="重置地图视角"
+              title="重置视角"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+          </div>,
+          document.body
+        )}
 
-      <motion.div 
-        drag
-        dragMomentum={false}
-        style={{ touchAction: "none" }}
-        className="absolute right-4 top-4 z-50 flex flex-col items-end gap-2 cursor-grab active:cursor-grabbing"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="lg:hidden">
-          <button
-          onClick={(e) => { e.stopPropagation(); setIsCityListOpen(!isCityListOpen); }}
-          className="flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#D8DDD8]/85 bg-[#FAFBF7]/90 shadow-[0_10px_28px_rgba(90,102,112,0.08)] backdrop-blur text-[#5A6670] transition hover:bg-[#D6E8F0]/45"
-          aria-label={isCityListOpen ? "关闭城市列表" : "展开城市列表"}
-        >
-          {isCityListOpen ? <X className="h-5 w-5" /> : <List className="h-5 w-5" />}
-        </button>
-        </div>
-
-        <aside
-          className={`w-[200px] sm:w-[230px] rounded-[8px] border border-[#D8DDD8]/85 bg-[#FAFBF7]/90 p-3 shadow-[0_16px_34px_rgba(90,102,112,0.10)] backdrop-blur transition-all duration-300 cursor-auto ${isCityListOpen ? 'opacity-100 translate-y-0 visible' : 'opacity-0 -translate-y-4 invisible hidden lg:opacity-100 lg:translate-y-0 lg:visible lg:block'}`}
-          onClick={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
-          onPointerMove={(event) => event.stopPropagation()}
-          onWheel={(event) => event.stopPropagation()}
-          aria-label={`${province.name}城市列表`}
-        >
-          <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-[#5A6670]">城市</h2>
-          <span className="text-xs font-medium text-[#5A6670]/54">{provinceCities.length}</span>
-        </div>
-        <div className="max-h-[430px] space-y-1 overflow-y-auto pr-1">
-          {cityList.map((city) => {
-            const lit = litCityIds.has(city.id);
-            const selected = city.id === selectedCityId;
-            const latestMemory = localMemories[city.id] ? sortMemoriesByTime(localMemories[city.id])[0] : undefined;
-            const moodConfigInfo = latestMemory?.mood ? moodConfig[latestMemory.mood] : undefined;
-
-            return (
+      {/* Viewport-docked Draggable City Selector Panel */}
+      {isMounted &&
+        createPortal(
+          <motion.div
+            drag
+            dragMomentum={false}
+            style={{ touchAction: "none" }}
+            className="fixed right-3 top-16 sm:right-8 sm:top-20 z-40 flex flex-col items-end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!isCityListOpen ? (
               <button
-                key={city.id}
-                className={`flex w-full items-center justify-between gap-3 rounded-[7px] px-3 py-2 text-left text-sm transition ${
-                  selected
-                    ? "bg-[#F5DCE0] text-[#E8B8C2] shadow-[0_8px_18px_rgba(232,184,194,0.16)]"
-                    : "text-[#5A6670]/78 hover:bg-[#D6E8F0]/34"
-                }`}
                 type="button"
-                onClick={() => handleSelectCity(city.id, lit)}
+                onClick={() => setIsCityListOpen(true)}
+                className="group relative flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full border border-[#D8DDD8]/85 bg-[#FAFBF7]/95 text-[#5A6670] shadow-[0_8px_24px_rgba(90,102,112,0.14)] backdrop-blur-md transition hover:border-[#D86F82] hover:text-[#D86F82] active:scale-95 cursor-grab active:cursor-grabbing"
+                title="展开城市列表 (可自由拖拽)"
+                aria-label="展开城市列表"
               >
-                <span className="flex min-w-0 items-center gap-2">
-                  {moodConfigInfo ? (
-                    <span className="text-[14px] leading-none">{moodConfigInfo.emoji}</span>
-                  ) : (
-                    <span
-                      className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#FAFBF7] ${
-                        lit ? "bg-[#E8B8C2] shadow-[0_0_10px_rgba(232,184,194,0.55)]" : "bg-[#D8DDD8]"
-                      }`}
-                    />
-                  )}
-                  <span className="truncate font-semibold">{city.name}</span>
-                </span>
-                <span className={`shrink-0 text-[11px] ${lit ? "text-[#E8B8C2]/80" : "text-[#5A6670]/40"}`}>
-                  {lit ? "已去过" : "未去过"}
+                <List className="h-5 w-5" />
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-[#D86F82] text-[10px] font-bold text-white shadow-2xs">
+                  {provinceCities.length}
                 </span>
               </button>
-            );
-          })}
-          </div>
-        </aside>
-      </motion.div>
+            ) : (
+              <aside
+                className="w-[220px] sm:w-[250px] rounded-[16px] border border-[#D8DDD8]/85 bg-[#FAFBF7]/95 p-3.5 shadow-[0_16px_36px_rgba(90,102,112,0.18)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-200"
+                aria-label={`${province.name}城市列表`}
+              >
+                <div className="mb-2.5 flex items-center justify-between border-b border-[#D8DDD8]/50 pb-2 cursor-grab active:cursor-grabbing">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[#5A6670]/40 text-xs select-none">⋮⋮</span>
+                    <h2 className="text-sm font-bold text-[#3F4951]">城市列表</h2>
+                    <span className="rounded-full bg-[#FAF0F2] px-1.5 py-0.2 text-[10px] font-semibold text-[#D86F82]">
+                      {litCityIds.size} / {provinceCities.length} 已去
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCityListOpen(false)}
+                    className="grid h-6 w-6 place-items-center rounded-full text-[#5A6670]/60 hover:bg-[#F5DCE0]/60 hover:text-[#D86F82] transition"
+                    title="收起为小圆圈"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="max-h-[380px] sm:max-h-[460px] space-y-1 overflow-y-auto pr-1">
+                  {cityList.map((city) => {
+                    const lit = litCityIds.has(city.id);
+                    const selected = city.id === selectedCityId;
+                    const latestMemory = localMemories[city.id]
+                      ? sortMemoriesByTime(localMemories[city.id])[0]
+                      : undefined;
+                    const moodConfigInfo = latestMemory?.mood
+                      ? moodConfig[latestMemory.mood]
+                      : undefined;
+
+                    return (
+                      <button
+                        key={city.id}
+                        className={`flex w-full items-center justify-between gap-2.5 rounded-[8px] px-2.5 py-2 text-left text-sm transition ${
+                          selected
+                            ? "bg-[#F5DCE0] text-[#D86F82] font-bold shadow-xs"
+                            : "text-[#5A6670]/80 hover:bg-[#D6E8F0]/30 hover:text-[#3F4951]"
+                        }`}
+                        type="button"
+                        onClick={() => handleSelectCity(city.id, lit)}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          {moodConfigInfo ? (
+                            <span className="text-[14px] leading-none shrink-0">
+                              {moodConfigInfo.emoji}
+                            </span>
+                          ) : (
+                            <span
+                              className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 border-[#FAFBF7] ${
+                                lit
+                                  ? "bg-[#E86F82] shadow-[0_0_8px_rgba(232,111,130,0.6)]"
+                                  : "bg-[#D8DDD8]"
+                              }`}
+                            />
+                          )}
+                          <span className="truncate">{city.name}</span>
+                        </span>
+                        <span
+                          className={`shrink-0 text-[11px] ${
+                            lit ? "text-[#D86F82] font-semibold" : "text-[#5A6670]/40"
+                          }`}
+                        >
+                          {lit ? "已探索" : "未去过"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </aside>
+            )}
+          </motion.div>,
+          document.body
+        )}
 
       {selectedCity && (
         <CityPanel
@@ -772,7 +693,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
         landmarkImage={cityAssets[selectedCity.id] ?? selectedCity.sprite}
       />
       )}
-    </div>
+    </motion.div>
   );
 }
 

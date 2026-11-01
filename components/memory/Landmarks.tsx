@@ -10,6 +10,7 @@ import { landmarkPhotoMaxDimension, landmarkPhotoQuality, type CityAssetStore } 
 import { LocalPrivacyImg } from "@/components/LocalPrivacyImage";
 import { writeAdminMode } from "@/data/adminMode";
 import { readCityAssets, writeCityAsset, deleteCityAsset } from "@/lib/client/storage";
+import { scrollToPageTop } from "@/lib/client/scroll";
 
 export default function LandmarksPage() {
   const isAdmin = useAdminMode();
@@ -18,16 +19,30 @@ export default function LandmarksPage() {
   const [loading, setLoading] = useState(true);
   const [savingCityId, setSavingCityId] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isMobile, setIsMobile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeCityIdRef = useRef<string>("");
 
-  const ITEMS_PER_PAGE = 9;
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(typeof window !== "undefined" ? window.innerWidth < 640 : false);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const itemsPerPage = isMobile ? 2 : 9;
 
   useEffect(() => {
     readCityAssets()
       .then((assets) => setCityAssets(assets))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    scrollToPageTop();
+  }, [currentPage]);
 
   const filteredCities = useMemo(() => {
     if (!searchQuery.trim()) return cities;
@@ -37,11 +52,16 @@ export default function LandmarksPage() {
     );
   }, [searchQuery]);
 
-  const totalPages = Math.ceil(filteredCities.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filteredCities.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
   const paginatedCities = filteredCities.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage,
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, isMobile]);
 
   const handlePickFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -132,7 +152,7 @@ export default function LandmarksPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif,.HEIC,.HEIF"
           className="hidden"
           onChange={handlePickFile}
         />
@@ -197,26 +217,67 @@ export default function LandmarksPage() {
             </div>
 
             {totalPages > 1 && (
-              <div className="mt-8 flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="rounded-[6px] border border-[#D8DDD8] px-3 py-1.5 text-sm text-[#5A6670]/70 transition hover:bg-[#FAFBF7] disabled:opacity-30"
-                >
-                  上一页
-                </button>
-                <span className="px-3 text-sm font-medium text-[#5A6670]/60">
-                  {currentPage} / {totalPages}
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#D8DDD8]/40 pt-6">
+                <span className="text-xs font-medium text-[#5A6670]/60">
+                  共 {filteredCities.length} 个城市 · 第 {safeCurrentPage} / {totalPages} 页
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="rounded-[6px] border border-[#D8DDD8] px-3 py-1.5 text-sm text-[#5A6670]/70 transition hover:bg-[#FAFBF7] disabled:opacity-30"
-                >
-                  下一页
-                </button>
+
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentPage((p) => Math.max(1, p - 1));
+                      scrollToPageTop();
+                    }}
+                    disabled={safeCurrentPage === 1}
+                    className="flex items-center gap-1 rounded-[8px] border border-[#D8DDD8] bg-white px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-[#5A6670] transition hover:border-[#E8B8C2] hover:text-[#E8B8C2] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0 whitespace-nowrap"
+                  >
+                    上一页
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }).map((_, i) => {
+                      const pageNum = i + 1;
+                      if (totalPages > 5) {
+                        if (pageNum !== 1 && pageNum !== totalPages && Math.abs(pageNum - safeCurrentPage) > 1) {
+                          if (pageNum === 2 || pageNum === totalPages - 1) {
+                            return <span key={pageNum} className="text-[#5A6670]/40 text-xs px-0.5">…</span>;
+                          }
+                          return null;
+                        }
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => {
+                            setCurrentPage(pageNum);
+                            scrollToPageTop();
+                          }}
+                          className={`h-7 min-w-[28px] sm:min-w-[32px] px-1.5 rounded-[8px] text-xs font-semibold transition cursor-pointer ${
+                            safeCurrentPage === pageNum
+                              ? "bg-[#E8B8C2] text-white shadow-xs"
+                              : "border border-[#D8DDD8] bg-white text-[#5A6670] hover:border-[#E8B8C2]"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentPage((p) => Math.min(totalPages, p + 1));
+                      scrollToPageTop();
+                    }}
+                    disabled={safeCurrentPage === totalPages}
+                    className="flex items-center gap-1 rounded-[8px] border border-[#D8DDD8] bg-white px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-[#5A6670] transition hover:border-[#E8B8C2] hover:text-[#E8B8C2] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0 whitespace-nowrap"
+                  >
+                    下一页
+                  </button>
+                </div>
               </div>
             )}
           </>

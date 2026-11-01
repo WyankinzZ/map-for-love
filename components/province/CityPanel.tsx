@@ -15,6 +15,7 @@ import {
 } from "./Shared";
 import { LocalPrivacyImg } from "@/components/LocalPrivacyImage";
 import { Lightbox, type LightboxPhoto } from "@/components/shared/Lightbox";
+import { isMobileStaticApp } from "@/lib/client/idb";
 
 export default function CityPanel({
   city,
@@ -43,6 +44,7 @@ export default function CityPanel({
   onDelete: (cityId: string, memoryId: string) => Promise<void>;
   landmarkImage: string;
 }>) {
+  const isEffectiveAdmin = isAdmin || isMobileStaticApp();
   const defaultMemory = getLatestMemory(city.id);
   const memories = sortMemoriesByTime(
     [
@@ -110,7 +112,7 @@ export default function CityPanel({
   const normalizedDate = normalizeMemoryDate(trimmedDate);
   const dateInvalid = trimmedDate.length > 0 && !normalizedDate;
   const canSave =
-    isAdmin &&
+    isEffectiveAdmin &&
     Boolean(normalizedDate) &&
     trimmedText.length > 0 &&
     !isReadingPhoto &&
@@ -201,14 +203,14 @@ export default function CityPanel({
   }, []);
 
   const handlePickFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isAdmin) {
+    if (!isEffectiveAdmin) {
       event.target.value = "";
       setPhotoError("请先进入管理员模式");
       return;
     }
 
     const files = Array.from(event.target.files ?? [])
-      .filter((file) => file.type.startsWith("image/"))
+      .filter((file) => file.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp|gif|bmp)$/i.test(file.name))
       .slice(0, maxPhotosPerMemory);
     if (files.length === 0) return;
 
@@ -252,7 +254,7 @@ export default function CityPanel({
   };
 
   const handleSave = async () => {
-    if (!isAdmin) {
+    if (!isEffectiveAdmin) {
       setSaveError("请先进入管理员模式");
       return;
     }
@@ -300,7 +302,7 @@ export default function CityPanel({
   };
 
   const handleSetCover = async (photo: string) => {
-    if (!isAdmin) {
+    if (!isEffectiveAdmin) {
       setCoverError("请先进入管理员模式");
       return;
     }
@@ -324,10 +326,10 @@ export default function CityPanel({
       dragListener={false}
       dragControls={dragControls}
       dragMomentum={false}
-      className="absolute inset-0 m-auto h-fit z-50 w-full max-w-[340px] sm:w-[380px] sm:max-w-none md:w-[420px] pointer-events-auto"
+      className="absolute inset-0 m-auto h-fit z-50 w-[calc(100%-24px)] max-w-[360px] sm:w-[380px] sm:max-w-none md:w-[420px] pointer-events-auto"
     >
       <motion.div
-        className="flex flex-col overflow-y-auto rounded-[10px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/90 shadow-[0_22px_56px_rgba(90,102,112,0.16)] backdrop-blur-xl max-h-[min(820px,calc(100vh-110px))] w-full p-6"
+        className="flex flex-col overflow-y-auto rounded-[12px] sm:rounded-[14px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/90 shadow-[0_22px_56px_rgba(90,102,112,0.16)] backdrop-blur-xl max-h-[min(820px,calc(100dvh-70px))] w-full p-4 sm:p-6"
         onClick={(event) => event.stopPropagation()}
         onWheel={(event) => event.stopPropagation()}
         initial={{ opacity: 0, y: 16, scale: 0.97 }}
@@ -349,7 +351,7 @@ export default function CityPanel({
           <p className="mt-3 text-sm text-[#5A6670]/76">
             {memory?.date ?? "添加回忆后点亮"}
           </p>
-          {!isAdmin && (
+          {!isEffectiveAdmin && (
             <p className="mt-2 text-xs font-semibold text-[#5A6670]/42">管理员锁定，无法修改回忆</p>
           )}
         </div>
@@ -423,7 +425,7 @@ export default function CityPanel({
                     type="button"
                     onClick={() => handleSetCover(photo)}
                     aria-label={isCover ? "当前封面" : `将第 ${index + 1} 张照片设为封面`}
-                    disabled={!isAdmin || isCover || Boolean(settingCover)}
+                    disabled={!isEffectiveAdmin || isCover || Boolean(settingCover)}
                   >
                     <MemoryImage src={photo} alt={`${city.name} memory photo ${index + 1}`} fit="cover" />
                     <span
@@ -525,7 +527,7 @@ export default function CityPanel({
                             className="grid h-6 w-6 place-items-center rounded-[5px] text-[#5A6670]/46 transition hover:bg-[#D6E8F0]/34 hover:text-[#A8C8DC]"
                             type="button"
                             onClick={() => startEdit(record)}
-                            disabled={!isAdmin}
+                            disabled={!isEffectiveAdmin}
                             aria-label={`编辑 ${record.city} ${record.date} 回忆`}
                           >
                             <Pencil className="h-3.5 w-3.5" />
@@ -534,7 +536,7 @@ export default function CityPanel({
                             className="grid h-6 w-6 place-items-center rounded-[5px] text-[#5A6670]/46 transition hover:bg-[#F5DCE0]/46 hover:text-[#E8B8C2] disabled:opacity-40"
                             type="button"
                             onClick={() => handleDelete(record)}
-                            disabled={!isAdmin || deletingMemoryId === record.id}
+                            disabled={!isEffectiveAdmin || deletingMemoryId === record.id}
                             aria-label={`删除 ${record.city} ${record.date} 回忆`}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -577,7 +579,7 @@ export default function CityPanel({
             userOpenedFormRef.current = true;
             setFormOpen(true);
           }}
-          disabled={!isAdmin}
+          disabled={!isEffectiveAdmin}
         >
           <Plus className="h-4 w-4" />
           {isLit ? "Add memory" : "Add memory to light"}
@@ -658,10 +660,10 @@ export default function CityPanel({
                   ref={fileInputRef}
                   className="hidden"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif,.HEIC,.HEIF"
                   multiple
                   onChange={handlePickFile}
-                  disabled={!isAdmin}
+                  disabled={!isEffectiveAdmin}
                 />
                 <button
                   className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-[6px] border border-dashed border-[#D8DDD8] bg-[#FAFBF7] px-3 py-3 text-sm text-[#5A6670]/70 transition hover:border-[#E8B8C2] hover:text-[#E8B8C2]"

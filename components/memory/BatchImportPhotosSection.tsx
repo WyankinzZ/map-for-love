@@ -10,6 +10,7 @@ import { readCompressedImageDataUrl } from '@/utils/imageUtils';
 import { memoryPhotoMaxDimension, memoryPhotoQuality } from '@/components/province/Shared';
 import { type MemoryMood, moodConfig } from '@/data/memories';
 import { saveMemory } from '@/lib/client/storage';
+import { isMobileStaticApp } from '@/lib/client/idb';
 
 interface BatchImportPhotosSectionProps {
   isAdmin: boolean;
@@ -53,6 +54,7 @@ export function BatchImportPhotosSection({
   setStatus,
   setMemoryCount,
 }: Readonly<BatchImportPhotosSectionProps>) {
+  const isEffectiveAdmin = isAdmin || isMobileStaticApp();
   const importPhotosRef = useRef<HTMLInputElement>(null);
   const [stagedPhotos, setStagedPhotos] = useState<StagedPhoto[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,7 +69,7 @@ export function BatchImportPhotosSection({
 
   const handleSelectPhotos = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
-    if (!isAdmin) {
+    if (!isEffectiveAdmin) {
       setStatus("请先进入管理员模式");
       return;
     }
@@ -227,13 +229,15 @@ export function BatchImportPhotosSection({
         </div>
         <div className="flex gap-2">
           <input
+            id="batchPhotosInput"
+            name="batchPhotosInput"
             ref={importPhotosRef}
             className="hidden"
             type="file"
             multiple
-            accept="image/*"
+            accept="image/*,.heic,.heif,.HEIC,.HEIF"
             onChange={handleSelectPhotos}
-            disabled={!isAdmin}
+            disabled={!isEffectiveAdmin}
           />
           <button
             className="flex items-center gap-2 rounded-[7px] bg-[#D6E8F0] px-4 py-2 text-sm font-semibold text-[#5A6670] transition hover:bg-[#A8C8DC] disabled:opacity-45"

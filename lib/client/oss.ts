@@ -25,6 +25,25 @@ export function getOssClientSync(config: OssConfig): OSS {
   return cachedClient;
 }
 
+export function hasStoredOssConfigSync(): boolean {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const stored = localStorage.getItem("mapofus:oss-config");
+    if (!stored) return false;
+    const parsed = JSON.parse(stored);
+    return Boolean(
+      parsed &&
+      typeof parsed.accessKeyId === "string" && parsed.accessKeyId.trim() &&
+      typeof parsed.accessKeySecret === "string" && parsed.accessKeySecret.trim() &&
+      typeof parsed.bucket === "string" && parsed.bucket.trim() &&
+      typeof parsed.region === "string" && parsed.region.trim()
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function getStoredOssConfig(): Promise<OssConfig | null> {
   if (typeof window === "undefined") return null;
 

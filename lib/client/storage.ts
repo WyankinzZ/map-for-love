@@ -1,6 +1,7 @@
 import { type Memory, type MemoryMood } from "@/data/memories";
 import { type LocalMemoryStore, memoryStoreUpdatedEvent } from "@/data/progress";
-import { type OssConfig, getStoredOssConfig, ossGetJson, ossPutJson, ossPutImage } from "./oss";
+import { type OssConfig, getStoredOssConfig, hasStoredOssConfigSync, ossGetJson, ossPutJson, ossPutImage } from "./oss";
+import { idbGet, idbSet, idbDelete, isMobileStaticApp } from "./idb";
 import { cities } from "@/data/cities";
 
 async function uploadMemoryImagesOss(memory: Memory): Promise<Memory> {
@@ -37,24 +38,14 @@ async function uploadMemoryImagesOss(memory: Memory): Promise<Memory> {
 }
 export type StorageMode = "electron" | "oss";
 
-let cachedMode: StorageMode | null = null;
-
 export function getStorageMode(): StorageMode {
-  if (cachedMode) return cachedMode;
-
-  if (typeof window === "undefined") {
-    cachedMode = "electron";
-    return cachedMode;
+  // If the user has explicitly configured OSS credentials, use OSS cloud storage
+  if (hasStoredOssConfigSync()) {
+    return "oss";
   }
 
-  const isElectron = Boolean(
-    (window as unknown as Record<string, unknown>).electronAPI ||
-    navigator.userAgent.includes("Electron") ||
-    process.env.NODE_ENV === "development"
-  );
-
-  cachedMode = isElectron ? "electron" : "oss";
-  return cachedMode;
+  // Default to pure local storage (desktop/local API mode)
+  return "electron";
 }
 
 export async function readJson<T>(key: string, fallback: T): Promise<T> {
@@ -64,12 +55,23 @@ export async function readJson<T>(key: string, fallback: T): Promise<T> {
     return ossGetJson<T>(key, fallback);
   }
 
-  const response = await fetch(`/api/settings/${key}`, { cache: "no-store" }).catch(() => null);
-  if (response?.ok) {
-    const data = await response.json();
-    return (data.value as T) ?? fallback;
+  if (isMobileStaticApp()) {
+    return idbGet<T>(`settings:${key}`, fallback);
   }
-  return fallback;
+
+  try {
+    const response = await fetch(`/api/settings/${key}`, { cache: "no-store" }).catch(() => null);
+    if (response?.ok) {
+      const data = await response.json();
+      const val = (data.value as T) ?? fallback;
+      idbSet(`settings:${key}`, val).catch(() => {});
+      return val;
+    }
+  } catch {
+    // fallback
+  }
+
+  return idbGet<T>(`settings:${key}`, fallback);
 }
 
 export async function writeJson<T>(key: string, value: T): Promise<void> {
@@ -77,14 +79,19 @@ export async function writeJson<T>(key: string, value: T): Promise<void> {
 
   if (mode === "oss") {
     await ossPutJson(key, value);
+    idbSet(`settings:${key}`, value).catch(() => {});
     return;
   }
 
-  await fetch(`/api/settings/${key}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ value }),
-  });
+  await idbSet(`settings:${key}`, value);
+
+  if (!isMobileStaticApp()) {
+    await fetch(`/api/settings/${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    }).catch(() => {});
+  }
 }
 
 export async function readMemories(): Promise<LocalMemoryStore> {
@@ -94,10 +101,39 @@ export async function readMemories(): Promise<LocalMemoryStore> {
     return ossGetJson<LocalMemoryStore>("memories", {});
   }
 
-  const response = await fetch("/api/memories", { cache: "no-store" });
-  if (!response.ok) throw new Error("Failed to read memories");
-  const data = await response.json();
-  return data.memories ?? {};
+  if (isMobileStaticApp()) {
+    const local = await idbGet<LocalMemoryStore>("memories", {});
+    if (local && Object.keys(local).length > 0) return local;
+
+    // Try seed file if available in static root
+    try {
+      const res = await fetch("./data/localMemories.json").catch(() => null);
+      if (res?.ok) {
+        const seed = await res.json();
+        if (seed && Object.keys(seed).length > 0) {
+          await idbSet("memories", seed);
+          return seed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return {};
+  }
+
+  try {
+    const response = await fetch("/api/memories", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json();
+      const store = data.memories ?? {};
+      idbSet("memories", store).catch(() => {});
+      return store;
+    }
+  } catch {
+    // offline or static fallback
+  }
+
+  return idbGet<LocalMemoryStore>("memories", {});
 }
 
 export async function writeMemories(memories: LocalMemoryStore): Promise<void> {
@@ -105,18 +141,26 @@ export async function writeMemories(memories: LocalMemoryStore): Promise<void> {
 
   if (mode === "oss") {
     await ossPutJson("memories", memories);
+    await idbSet("memories", memories);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(memoryStoreUpdatedEvent, { detail: memories }));
     }
     return;
   }
 
-  const response = await fetch("/api/memories", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ memories }),
-  });
-  if (!response.ok) throw new Error("Failed to write memories");
+  await idbSet("memories", memories);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(memoryStoreUpdatedEvent, { detail: memories }));
+  }
+
+  if (!isMobileStaticApp()) {
+    const response = await fetch("/api/memories", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memories }),
+    }).catch(() => null);
+    if (response && !response.ok) throw new Error("Failed to write memories");
+  }
 }
 
 export async function saveMemory(
@@ -137,13 +181,43 @@ export async function saveMemory(
     return { memories: nextMemories };
   }
 
-  const response = await fetch("/api/memories", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ memory }),
-  });
-  if (!response.ok) throw new Error("Failed to save memory");
-  return response.json();
+  if (isMobileStaticApp()) {
+    const memories = await readMemories();
+    const cityMemories = memories[cityId] ?? [];
+    const nextMemories = {
+      ...memories,
+      [cityId]: [memory as Memory, ...cityMemories],
+    };
+    await writeMemories(nextMemories);
+    return { memories: nextMemories };
+  }
+
+  try {
+    const response = await fetch("/api/memories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memory }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.memories) {
+        await idbSet("memories", data.memories);
+      }
+      return data;
+    }
+  } catch {
+    // offline fallback
+  }
+
+  // Fallback to local IndexedDB
+  const memories = await readMemories();
+  const cityMemories = memories[cityId] ?? [];
+  const nextMemories = {
+    ...memories,
+    [cityId]: [memory as Memory, ...cityMemories],
+  };
+  await writeMemories(nextMemories);
+  return { memories: nextMemories };
 }
 
 export async function updateMemory(
@@ -164,13 +238,44 @@ export async function updateMemory(
     return { memories };
   }
 
-  const response = await fetch("/api/memories", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cityId, memoryId, memory }),
-  });
-  if (!response.ok) throw new Error("Failed to update memory");
-  return response.json();
+  if (isMobileStaticApp()) {
+    const memories = await readMemories();
+    const cityMemories = memories[cityId] ?? [];
+    const index = cityMemories.findIndex((m) => m.id === memoryId);
+    if (index === -1) throw new Error("Memory not found");
+    const mergedMemory = { ...cityMemories[index], ...memory } as Memory;
+    cityMemories[index] = mergedMemory;
+    const nextMemories = { ...memories, [cityId]: cityMemories };
+    await writeMemories(nextMemories);
+    return { memories: nextMemories };
+  }
+
+  try {
+    const response = await fetch("/api/memories", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cityId, memoryId, memory }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.memories) {
+        await idbSet("memories", data.memories);
+      }
+      return data;
+    }
+  } catch {
+    // offline fallback
+  }
+
+  const memories = await readMemories();
+  const cityMemories = memories[cityId] ?? [];
+  const index = cityMemories.findIndex((m) => m.id === memoryId);
+  if (index === -1) throw new Error("Memory not found");
+  const mergedMemory = { ...cityMemories[index], ...memory } as Memory;
+  cityMemories[index] = mergedMemory;
+  const nextMemories = { ...memories, [cityId]: cityMemories };
+  await writeMemories(nextMemories);
+  return { memories: nextMemories };
 }
 
 export async function deleteMemory(
@@ -193,13 +298,48 @@ export async function deleteMemory(
     return { memories: nextMemories };
   }
 
-  const response = await fetch("/api/memories", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cityId, memoryId }),
-  });
-  if (!response.ok) throw new Error("Failed to delete memory");
-  return response.json();
+  if (isMobileStaticApp()) {
+    const memories = await readMemories();
+    const cityMemories = memories[cityId] ?? [];
+    const nextMemories = {
+      ...memories,
+      [cityId]: cityMemories.filter((m) => m.id !== memoryId),
+    };
+    if (nextMemories[cityId]?.length === 0) {
+      delete nextMemories[cityId];
+    }
+    await writeMemories(nextMemories);
+    return { memories: nextMemories };
+  }
+
+  try {
+    const response = await fetch("/api/memories", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cityId, memoryId }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.memories) {
+        await idbSet("memories", data.memories);
+      }
+      return data;
+    }
+  } catch {
+    // offline fallback
+  }
+
+  const memories = await readMemories();
+  const cityMemories = memories[cityId] ?? [];
+  const nextMemories = {
+    ...memories,
+    [cityId]: cityMemories.filter((m) => m.id !== memoryId),
+  };
+  if (nextMemories[cityId]?.length === 0) {
+    delete nextMemories[cityId];
+  }
+  await writeMemories(nextMemories);
+  return { memories: nextMemories };
 }
 
 export async function readCityAssets(): Promise<Record<string, string>> {
@@ -209,10 +349,23 @@ export async function readCityAssets(): Promise<Record<string, string>> {
     return ossGetJson<Record<string, string>>("city-assets", {});
   }
 
-  const response = await fetch("/api/city-assets", { cache: "no-store" });
-  if (!response.ok) throw new Error("Failed to read city assets");
-  const data = await response.json();
-  return data.assets ?? {};
+  if (isMobileStaticApp()) {
+    return idbGet<Record<string, string>>("city-assets", {});
+  }
+
+  try {
+    const response = await fetch("/api/city-assets", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json();
+      const assets = data.assets ?? {};
+      idbSet("city-assets", assets).catch(() => {});
+      return assets;
+    }
+  } catch {
+    // fallback
+  }
+
+  return idbGet<Record<string, string>>("city-assets", {});
 }
 
 export async function writeCityAsset(
@@ -231,17 +384,38 @@ export async function writeCityAsset(
     }
     const nextAssets = { ...assets, [cityId]: finalImage };
     await ossPutJson("city-assets", nextAssets);
+    await idbSet("city-assets", nextAssets);
     return nextAssets;
   }
 
-  const response = await fetch("/api/city-assets", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cityId, image }),
-  });
-  if (!response.ok) throw new Error("Failed to write city asset");
-  const data = await response.json();
-  return data.assets ?? {};
+  const assets = await readCityAssets();
+  const nextAssets = { ...assets, [cityId]: image };
+  await idbSet("city-assets", nextAssets);
+
+  if (!isMobileStaticApp()) {
+    await fetch("/api/city-assets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cityId, image }),
+    }).catch(() => {});
+  }
+
+  return nextAssets;
+}
+
+export async function writeCityAssets(assets: Record<string, string>): Promise<void> {
+  const mode = getStorageMode();
+  if (mode === "oss") {
+    await ossPutJson("city-assets", assets);
+  }
+  await idbSet("city-assets", assets);
+  if (!isMobileStaticApp()) {
+    await fetch("/api/city-assets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ batch: assets }),
+    }).catch(() => {});
+  }
 }
 
 export async function deleteCityAsset(cityId: string): Promise<Record<string, string>> {
@@ -252,17 +426,24 @@ export async function deleteCityAsset(cityId: string): Promise<Record<string, st
     const nextAssets = { ...assets };
     delete nextAssets[cityId];
     await ossPutJson("city-assets", nextAssets);
+    await idbSet("city-assets", nextAssets);
     return nextAssets;
   }
 
-  const response = await fetch("/api/city-assets", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cityId }),
-  });
-  if (!response.ok) throw new Error("Failed to delete city asset");
-  const data = await response.json();
-  return data.assets ?? {};
+  const assets = await readCityAssets();
+  const nextAssets = { ...assets };
+  delete nextAssets[cityId];
+  await idbSet("city-assets", nextAssets);
+
+  if (!isMobileStaticApp()) {
+    await fetch("/api/city-assets", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cityId }),
+    }).catch(() => {});
+  }
+
+  return nextAssets;
 }
 
 export async function readLoginPhotos(): Promise<Record<string, string>> {
@@ -273,10 +454,25 @@ export async function readLoginPhotos(): Promise<Record<string, string>> {
     return store.photos ?? {};
   }
 
-  const response = await fetch("/api/login-photos", { cache: "no-store" });
-  if (!response.ok) throw new Error("Failed to read login photos");
-  const data = await response.json();
-  return data.photos ?? {};
+  if (isMobileStaticApp()) {
+    const store = await idbGet<{ photos: Record<string, string> }>("login-photos", { photos: {} });
+    return store.photos ?? {};
+  }
+
+  try {
+    const response = await fetch("/api/login-photos", { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json();
+      const photos = data.photos ?? {};
+      idbSet("login-photos", { photos }).catch(() => {});
+      return photos;
+    }
+  } catch {
+    // fallback
+  }
+
+  const store = await idbGet<{ photos: Record<string, string> }>("login-photos", { photos: {} });
+  return store.photos ?? {};
 }
 
 export async function writeLoginPhoto(
@@ -293,18 +489,25 @@ export async function writeLoginPhoto(
     }
     const nextStore = { ...store, photos: { ...store.photos, [slotId]: finalImage } };
     await ossPutJson("login-photos", nextStore);
+    await idbSet("login-photos", nextStore);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("mapofus:login-photos-updated"));
     }
     return;
   }
 
-  const response = await fetch("/api/login-photos", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ slotId, image }),
-  });
-  if (!response.ok) throw new Error("Failed to write login photo");
+  const currentStore = await idbGet<{ photos: Record<string, string> }>("login-photos", { photos: {} });
+  const nextStore = { ...currentStore, photos: { ...currentStore.photos, [slotId]: image } };
+  await idbSet("login-photos", nextStore);
+
+  if (!isMobileStaticApp()) {
+    await fetch("/api/login-photos", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotId, image }),
+    }).catch(() => {});
+  }
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("mapofus:login-photos-updated"));
   }
@@ -318,18 +521,26 @@ export async function deleteLoginPhoto(slotId: string): Promise<void> {
     const nextStore = { ...store };
     delete nextStore.photos[slotId];
     await ossPutJson("login-photos", nextStore);
+    await idbSet("login-photos", nextStore);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("mapofus:login-photos-updated"));
     }
     return;
   }
 
-  const response = await fetch("/api/login-photos", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ slotId }),
-  });
-  if (!response.ok) throw new Error("Failed to delete login photo");
+  const currentStore = await idbGet<{ photos: Record<string, string> }>("login-photos", { photos: {} });
+  const nextStore = { ...currentStore };
+  delete nextStore.photos[slotId];
+  await idbSet("login-photos", nextStore);
+
+  if (!isMobileStaticApp()) {
+    await fetch("/api/login-photos", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotId }),
+    }).catch(() => {});
+  }
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("mapofus:login-photos-updated"));
   }

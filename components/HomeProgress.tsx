@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type ReactNode, type SVGProps } from "rea
 import Link from "next/link";
 import { CalendarDays, Heart, Images, RefreshCw, PlaneTakeoff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Route } from "lucide-react";
 import { LocalPrivacyImage } from "@/components/LocalPrivacyImage";
 import { cities } from "@/data/cities";
 import {
@@ -694,56 +693,9 @@ function TripCountdownCard() {
   );
 }
 
-export function TimelineSidebarCard() {
-  const memories = useMemories();
-  const count = Object.values(memories).flat().length;
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    const handleSync = (e: CustomEvent<boolean>) => setActive(e.detail);
-    window.addEventListener("timeline-state-sync", handleSync as EventListener);
-    return () => window.removeEventListener("timeline-state-sync", handleSync as EventListener);
-  }, []);
-
-  if (count < 2) return null;
-
-  const toggle = () => {
-    const next = !active;
-    setActive(next);
-    window.dispatchEvent(new CustomEvent("toggle-timeline", { detail: next }));
-  };
-
-  return (
-    <button
-      className={`group relative mt-1 mb-2 flex w-full shrink-0 flex-col overflow-hidden rounded-[8px] border transition duration-300 ${
-        active 
-          ? "border-[#E8B8C2] bg-[#F5DCE0]/20 shadow-[0_4px_16px_rgba(232,184,194,0.15)]"
-          : "border-[#D8DDD8]/70 bg-[#FAFBF7]/62 hover:border-[#D8DDD8] hover:bg-white hover:shadow-sm"
-      }`}
-      onClick={toggle}
-      type="button"
-    >
-      <div className="flex w-full items-center gap-3 px-4 py-3">
-        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition ${active ? "bg-[#E8B8C2] text-white" : "bg-[#F5DCE0]/50 text-[#D86F82]"}`}>
-          <Route className="h-3.5 w-3.5" />
-        </span>
-        <div className="flex-1 text-left min-w-0">
-          <p className="truncate text-sm font-semibold text-[#5A6670]">旅行时间线</p>
-          {active && (
-            <p className="truncate text-[11px] font-medium text-[#5A6670]/54 mt-0.5">
-              点击退出播放
-            </p>
-          )}
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export function StatsPanel({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <aside className="flex w-full lg:h-full lg:w-[310px] shrink-0 flex-col border-t lg:border-t-0 lg:border-l border-dashed border-[#D8DDD8] px-5 py-8 sm:px-7 lg:py-7 lg:overflow-y-auto pb-24 lg:pb-8">
-      <TimelineSidebarCard />
       <DateTimeCard />
       <WeatherCard />
       {children}

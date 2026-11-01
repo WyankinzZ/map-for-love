@@ -17,8 +17,22 @@
 /.next/
 /out/
 
-# production
+# production & builds
 /dist
+/out
+*.apk
+*.exe
+*.zip
+*.7z
+
+# android build artifacts
+android/.gradle
+android/app/build
+android/build
+android/captures
+android/.idea
+android/local.properties
+app/_api_backup
 
 # misc
 .DS_Store

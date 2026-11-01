@@ -93,6 +93,8 @@ export function LogoSection({
             >
               上传新头像
               <input
+                id="logoFileInput"
+                name="logoFileInput"
                 type="file"
                 accept="image/*"
                 className="hidden"

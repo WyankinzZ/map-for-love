@@ -3,6 +3,7 @@ import OSS from "ali-oss";
 import sharp from "sharp";
 import { getPrivateDataFilePath } from "./dataDir";
 import { uploadDataImage } from "./supabase";
+import { saveLocalDataImage } from "./localUploads";
 
 const ossConfigPath = getPrivateDataFilePath("ossConfig.private.json");
 
@@ -172,7 +173,7 @@ export async function uploadImagesConcurrent(
   images: { value: string; pathPrefix: string; fileName: string }[],
 ): Promise<string[]> {
   const tasks = images.map((img) => () =>
-    uploadDataImageOSS(img.value, img.pathPrefix, img.fileName).catch(() => img.value),
+    uploadImageWithFallback(img.value, img.pathPrefix, img.fileName).catch(() => img.value),
   );
   return runConcurrent(tasks, CONCURRENCY_LIMIT);
 }
@@ -185,6 +186,9 @@ export async function uploadImageWithFallback(
   let url = await uploadDataImageOSS(value, pathPrefix, fallbackFileName).catch(() => value);
   if (url === value) {
     url = await uploadDataImage(value, pathPrefix, fallbackFileName);
+  }
+  if (url === value && value.startsWith("data:image/")) {
+    url = await saveLocalDataImage(value, pathPrefix, fallbackFileName).catch(() => value);
   }
   return url;
 }

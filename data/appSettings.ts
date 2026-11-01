@@ -52,7 +52,13 @@ export const readAppSettings = (): AppSettings => {
       settings.loginPhotos && typeof settings.loginPhotos === "object" && !Array.isArray(settings.loginPhotos)
         ? Object.fromEntries(
             Object.entries(settings.loginPhotos).filter(
-              ([, value]) => typeof value === "string" && value.startsWith("data:image/"),
+              ([, value]) =>
+                typeof value === "string" &&
+                (value.startsWith("data:image/") ||
+                  value.startsWith("/api/uploads/") ||
+                  value.startsWith("/photos/") ||
+                  value.startsWith("https://") ||
+                  value.startsWith("/")),
             ),
           )
         : {};

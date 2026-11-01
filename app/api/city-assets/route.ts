@@ -32,7 +32,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isAllowedImage = (value: string) =>
   value.length <= imageMaxLength &&
-  (value.startsWith("/sprites/") || value.startsWith("https://") || value.startsWith("data:image/"));
+  (value.startsWith("/sprites/") ||
+    value.startsWith("/photos/") ||
+    value.startsWith("/api/uploads/") ||
+    value.startsWith("https://") ||
+    value.startsWith("data:image/"));
 
 function normalizeCityAssetStore(value: unknown): CityAssetStore {
   if (!isRecord(value)) return {};

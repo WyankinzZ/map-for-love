@@ -60,6 +60,14 @@ export default function RandomPhotoCard() {
   const [photo, setPhoto] = useState<RandomPhoto | null>(null);
   const [photos, setPhotos] = useState<RandomPhoto[]>([]);
   const [collapsed, setCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (window.innerWidth < 640) {
+      setCollapsed(true);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +135,10 @@ export default function RandomPhotoCard() {
     return () => clearInterval(timer);
   }, [photos.length]);
 
+  if (!mounted) {
+    return null;
+  }
+
   if (collapsed) {
     return (
       <motion.button
@@ -136,7 +148,7 @@ export default function RandomPhotoCard() {
         dragMomentum={false}
         onClick={() => setCollapsed(false)}
         whileDrag={{ scale: 1.05, cursor: "grabbing" }}
-        className="absolute bottom-20 right-4 z-30 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-[#D8DDD8]/80 bg-[#FAFBF7]/86 shadow-[0_12px_28px_rgba(90,102,112,0.15)] backdrop-blur-xl transition hover:scale-105 cursor-grab active:cursor-grabbing sm:bottom-[4.75rem] sm:right-[2.5rem]"
+        className="absolute bottom-20 left-4 z-30 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border border-[#D8DDD8]/80 bg-[#FAFBF7]/86 shadow-[0_12px_28px_rgba(90,102,112,0.15)] backdrop-blur-xl transition hover:scale-105 cursor-grab active:cursor-grabbing sm:left-auto sm:bottom-[7.25rem] sm:right-[2.5rem]"
         aria-label="展开随机相框"
       >
         <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-[#E8B8C2]" />
@@ -151,7 +163,7 @@ export default function RandomPhotoCard() {
       dragElastic={0.2}
       dragMomentum={false}
       whileDrag={{ scale: 1.05, cursor: "grabbing" }}
-      className="absolute bottom-20 right-4 z-30 w-[160px] sm:w-[200px] xl:w-[248px] rotate-[-1.5deg] sm:bottom-[4.75rem] sm:right-[2.5rem] origin-bottom-right cursor-grab"
+      className="absolute bottom-20 left-4 z-30 w-[170px] sm:w-[200px] xl:w-[248px] rotate-[-1.5deg] sm:left-auto sm:bottom-[7.25rem] sm:right-[2.5rem] origin-bottom-left sm:origin-bottom-right cursor-grab"
     >
       <div className="rounded-[8px] border border-[#D8DDD8]/80 bg-[#FAFBF7]/86 p-2.5 sm:p-3 shadow-[0_22px_58px_rgba(90,102,112,0.15)] backdrop-blur-xl transition duration-300 hover:border-[#F5DCE0]">
         <div className="mb-2.5 flex items-center justify-between gap-3">

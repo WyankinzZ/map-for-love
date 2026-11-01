@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import ChinaMap, { SouthChinaSeaInset } from "@/components/ChinaMap";
 import BackToLoginButton from "@/components/BackToLoginButton";
@@ -65,8 +68,10 @@ function Legend() {
 }
 
 export default function MapPage() {
+  const [mobileTab, setMobileTab] = useState<"map" | "stats">("map");
+
   return (
-    <main className="relative h-[100dvh] max-h-[100dvh] overflow-y-auto overflow-x-hidden lg:overflow-hidden bg-[#FAFBF7] text-[#5A6670]">
+    <main className="relative h-[100dvh] max-h-[100dvh] overflow-hidden bg-[#FAFBF7] text-[#5A6670]">
       <div className="map-mist-band" aria-hidden="true" />
       <Cloud src="/sprites/decorations/cloud-medium.png" className="left-[18%] top-[12%] w-28" />
       <Cloud src="/sprites/decorations/cloud-large.png" className="left-[43%] top-[11%] w-36" />
@@ -79,35 +84,105 @@ export default function MapPage() {
       <span className="absolute left-[28%] bottom-[7%] h-2 w-2 bg-[#D4E8D0]" aria-hidden="true" />
       <span className="absolute right-[11%] top-[19%] h-2 w-2 bg-[#D6E8F0]" aria-hidden="true" />
 
-      <div className="relative z-10 flex flex-col lg:flex-row min-h-max lg:h-full">
-        <section className="relative flex h-[100dvh] lg:h-full min-w-0 flex-1 flex-col overflow-hidden px-4 py-6 sm:px-9 shrink-0">
-          <header className="flex items-start justify-between gap-5">
-            <div className="flex items-start gap-4">
+      <div className="relative z-10 flex flex-col lg:flex-row h-full">
+        {/* Main Map View */}
+        <section
+          className={`relative min-w-0 flex-1 flex-col overflow-hidden px-3 pt-3 pb-16 sm:px-9 sm:py-6 lg:pb-6 shrink-0 h-full ${
+            mobileTab === "map" ? "flex" : "hidden lg:flex"
+          }`}
+        >
+          <header className="flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-4">
               <BrandMark />
               <div>
-                <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.01em] text-[#5A6670] whitespace-nowrap">
-                  Map for Love
+                <h1 className="text-xl sm:text-[28px] font-semibold leading-tight tracking-[-0.01em] text-[#5A6670] whitespace-nowrap">
+                  Map For Love
                 </h1>
-                <p className="mt-1 text-base font-medium text-[#5A6670]/62">我们的地图</p>
               </div>
               <ProgressBadge />
             </div>
-            <BackToLoginButton />
+            <div className="flex items-center gap-2">
+              <BackToLoginButton />
+            </div>
           </header>
 
-          <div className="flex min-h-0 flex-1 items-center justify-center pb-28 pt-0 sm:pb-20 lg:pb-6">
-            <ChinaMap className="w-[min(100%,1100px)] max-w-[1100px]" width={1100} height={860} />
+          {/* Mobile Segmented Toggle */}
+          <div className="my-2 flex shrink-0 items-center justify-center p-0.5 rounded-full border border-[#D8DDD8]/80 bg-[#FAFBF7]/90 shadow-xs lg:hidden max-w-[220px] self-center">
+            <button
+              type="button"
+              onClick={() => setMobileTab("map")}
+              className={`flex-1 py-1 px-3 text-xs font-semibold rounded-full transition ${
+                mobileTab === "map"
+                  ? "bg-[#D86F82] text-white shadow-xs"
+                  : "text-[#5A6670]/60 hover:text-[#5A6670]"
+              }`}
+            >
+              🗺️ 探索地图
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("stats")}
+              className={`flex-1 py-1 px-3 text-xs font-semibold rounded-full transition ${
+                mobileTab === "stats"
+                  ? "bg-[#D86F82] text-white shadow-xs"
+                  : "text-[#5A6670]/60 hover:text-[#5A6670]"
+              }`}
+            >
+              📊 沿途数据
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 items-center justify-center pt-0 pb-2 sm:pb-6">
+            <ChinaMap className="w-[min(100%,1100px)] max-w-[1100px] h-full" width={1100} height={860} />
           </div>
 
           <RandomPhotoCard />
 
           <SouthChinaSeaInset />
 
-          <div className="absolute bottom-6 left-4 z-20 sm:bottom-7 sm:left-9 xl:left-6">
+          <div className="absolute bottom-16 left-3 z-20 sm:bottom-7 sm:left-9 xl:left-6">
             <Legend />
           </div>
         </section>
-        <StatsPanel>{null}</StatsPanel>
+
+        {/* Mobile Stats Panel View */}
+        <div
+          className={`flex-col flex-1 overflow-y-auto px-4 pt-3 pb-24 h-full ${
+            mobileTab === "stats" ? "flex lg:hidden" : "hidden"
+          }`}
+        >
+          {/* Mobile Segmented Toggle Header in Stats View */}
+          <div className="mb-3 flex shrink-0 items-center justify-center p-0.5 rounded-full border border-[#D8DDD8]/80 bg-[#FAFBF7]/90 shadow-xs max-w-[220px] self-center">
+            <button
+              type="button"
+              onClick={() => setMobileTab("map")}
+              className={`flex-1 py-1 px-3 text-xs font-semibold rounded-full transition ${
+                mobileTab === "map"
+                  ? "bg-[#D86F82] text-white shadow-xs"
+                  : "text-[#5A6670]/60 hover:text-[#5A6670]"
+              }`}
+            >
+              🗺️ 探索地图
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("stats")}
+              className={`flex-1 py-1 px-3 text-xs font-semibold rounded-full transition ${
+                mobileTab === "stats"
+                  ? "bg-[#D86F82] text-white shadow-xs"
+                  : "text-[#5A6670]/60 hover:text-[#5A6670]"
+              }`}
+            >
+              📊 沿途数据
+            </button>
+          </div>
+          <StatsPanel>{null}</StatsPanel>
+        </div>
+
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex lg:h-full lg:w-[310px] shrink-0">
+          <StatsPanel>{null}</StatsPanel>
+        </div>
       </div>
       <MobileBottomNav />
     </main>

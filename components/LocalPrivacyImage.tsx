@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { Camera } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 
 type LocalPrivacyImageProps = {
   src: string;
@@ -23,6 +23,7 @@ const localHostnames = new Set<string>();
 const isPotentialPrivatePhoto = (src: string) =>
   src.startsWith("/photos/") ||
   src.startsWith("/logo/") ||
+  src.startsWith("/api/uploads/") ||
   src.startsWith("data:image/") ||
   src.startsWith("blob:") ||
   src.startsWith("https://");
@@ -111,17 +112,57 @@ export function LocalPrivacyImg({
   src,
   alt,
   className,
+  fallbackSrc,
 }: Readonly<{
   src: string;
   alt: string;
   className?: string;
+  fallbackSrc?: string;
 }>) {
   const isLocalHost = useLocalPrivacyMode();
-  const imageSrc = isLocalHost && isPotentialPrivatePhoto(src) ? localPrivacyPlaceholder : src;
+  const [hasError, setHasError] = useState(false);
+  const [heicConvertedSrc, setHeicConvertedSrc] = useState<string | null>(null);
+
+  const initialSrc = isLocalHost && isPotentialPrivatePhoto(src) ? localPrivacyPlaceholder : src;
+
+  // Auto-convert existing legacy HEIC dataUrls saved in IndexedDB
+  useEffect(() => {
+    let cancelled = false;
+    if (src && (src.startsWith("data:image/heic") || src.startsWith("data:image/heif"))) {
+      (async () => {
+        try {
+          const res = await fetch(src);
+          const blob = await res.blob();
+          const { convertHeicToJpegBlob, readBlobAsDataUrl } = await import("@/utils/imageUtils");
+          const jpegBlob = await convertHeicToJpegBlob(blob);
+          const newUrl = await readBlobAsDataUrl(jpegBlob);
+          if (!cancelled) setHeicConvertedSrc(newUrl);
+        } catch (e) {
+          console.warn("[LocalPrivacyImg] Legacy HEIC on-the-fly conversion failed:", e);
+          if (!cancelled) setHasError(true);
+        }
+      })();
+    } else {
+      setHeicConvertedSrc(null);
+      setHasError(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  const resolvedSrc = heicConvertedSrc || (hasError ? (fallbackSrc || "/sprites/icons/city-dot.svg") : initialSrc);
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img className={className} src={imageSrc} alt={alt} />
+    <img
+      className={className}
+      src={resolvedSrc}
+      alt={alt}
+      onError={() => {
+        if (!hasError) setHasError(true);
+      }}
+    />
   );
 }
 
