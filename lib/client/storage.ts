@@ -154,12 +154,18 @@ export async function writeMemories(memories: LocalMemoryStore): Promise<void> {
   }
 
   if (!isMobileStaticApp()) {
-    const response = await fetch("/api/memories", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memories }),
-    }).catch(() => null);
-    if (response && !response.ok) throw new Error("Failed to write memories");
+    try {
+      const response = await fetch("/api/memories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memories }),
+      });
+      if (!response.ok) {
+        console.warn("[writeMemories] Server sync returned non-ok status:", response.status);
+      }
+    } catch (err) {
+      console.warn("[writeMemories] Server sync failed, data persisted locally in idb:", err);
+    }
   }
 }
 

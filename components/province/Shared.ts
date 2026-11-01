@@ -1,7 +1,7 @@
 import { type Memory } from "@/data/memories";
 import { type LocalMemoryStore, memoryStoreUpdatedEvent } from "@/data/progress";
 import { writeAdminMode } from "@/data/adminMode";
-import { isMobileStaticApp } from "@/lib/client/idb";
+import { isMobileStaticApp, isDesktopApp } from "@/lib/client/idb";
 import {
   readMemories as readMemoriesFromStorage,
   writeMemories as writeMemoriesToStorage,
@@ -154,8 +154,10 @@ export async function memoryApiCall(
     });
 
     if (response.status === 401 || response.status === 403) {
-      writeAdminMode(false);
-      throw new Error("Admin session expired");
+      if (!isDesktopApp()) {
+        writeAdminMode(false);
+        throw new Error("Admin session expired");
+      }
     }
     if (response.ok) {
       return response.json();

@@ -37,6 +37,9 @@
       "!node_modules/**/*",
       "electron/**/*",
       ".next/standalone/**/*",
+      "!.next/standalone/dist/**/*",
+      "!.next/standalone/out/**/*",
+      "!.next/standalone/android/**/*",
       "package.json"
     ],
     "mac": {

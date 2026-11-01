@@ -25,6 +25,9 @@ await Promise.all(
   ),
 );
 
+await rm(path.join(standaloneDir, "dist"), { recursive: true, force: true });
+await rm(path.join(standaloneDir, "out"), { recursive: true, force: true });
+await rm(path.join(standaloneDir, "android"), { recursive: true, force: true });
 await rm(path.join(standaloneNextDir, "node_modules"), { recursive: true, force: true });
 
 console.log("[desktop] standalone assets prepared");

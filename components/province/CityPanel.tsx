@@ -15,7 +15,7 @@ import {
 } from "./Shared";
 import { LocalPrivacyImg } from "@/components/LocalPrivacyImage";
 import { Lightbox, type LightboxPhoto } from "@/components/shared/Lightbox";
-import { isMobileStaticApp } from "@/lib/client/idb";
+import { isMobileStaticApp, isDesktopApp } from "@/lib/client/idb";
 
 export default function CityPanel({
   city,
@@ -44,7 +44,7 @@ export default function CityPanel({
   onDelete: (cityId: string, memoryId: string) => Promise<void>;
   landmarkImage: string;
 }>) {
-  const isEffectiveAdmin = isAdmin || isMobileStaticApp();
+  const isEffectiveAdmin = isAdmin || isMobileStaticApp() || isDesktopApp();
   const defaultMemory = getLatestMemory(city.id);
   const memories = sortMemoriesByTime(
     [
@@ -294,7 +294,8 @@ export default function CityPanel({
       });
       resetForm(true);
       setFormOpen(false);
-    } catch {
+    } catch (err) {
+      console.error("[CityPanel] handleSave error:", err);
       setSaveError("保存失败，请稍后再试");
     } finally {
       if (mountedRef.current) setIsSaving(false);

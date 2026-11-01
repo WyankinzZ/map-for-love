@@ -16,7 +16,6 @@ import {
   appSettingsUpdatedEvent,
   defaultAnniversaryDate,
   defaultAnniversaryLabel,
-  defaultCoupleLogo,
   defaultWeatherCityIds,
   readAppSettings,
   type AppSettings,
@@ -533,48 +532,6 @@ function AlbumProgressCard() {
   );
 }
 
-function CoupleLogo() {
-  const [activeHead, setActiveHead] = useState<"left" | "right" | null>(null);
-  const settings = useAppSettings();
-  const logoSrc = settings.coupleLogo ?? defaultCoupleLogo;
-
-  const popHead = (side: "left" | "right") => {
-    setActiveHead(side);
-    window.setTimeout(() => setActiveHead(null), 260);
-  };
-
-  return (
-    <div className="mt-auto hidden justify-center lg:flex">
-      <div className="relative aspect-[1106/849] w-52">
-        <LocalPrivacyImage
-          src={logoSrc}
-          alt="我们的拼图头像 logo"
-          fill
-          sizes="208px"
-          className={`object-contain transition-transform duration-300 ease-out ${activeHead === "left"
-            ? "scale-[1.08] origin-[33%_47%]"
-            : activeHead === "right"
-              ? "scale-[1.08] origin-[69%_45%]"
-              : "scale-100"
-            }`}
-        />
-        <button
-          className="absolute left-[15%] top-[23%] h-[42%] w-[31%] rounded-full outline-none transition hover:scale-[1.04] focus-visible:ring-2 focus-visible:ring-[#A8C8DC]/70 active:scale-[1.08]"
-          type="button"
-          aria-label="放大左边头像"
-          onClick={() => popHead("left")}
-        />
-        <button
-          className="absolute right-[11%] top-[21%] h-[45%] w-[34%] rounded-full outline-none transition hover:scale-[1.04] focus-visible:ring-2 focus-visible:ring-[#E8B8C2]/70 active:scale-[1.08]"
-          type="button"
-          aria-label="放大右边头像"
-          onClick={() => popHead("right")}
-        />
-      </div>
-    </div>
-  );
-}
-
 function useProgress() {
   const memories = useMemories();
 
@@ -702,7 +659,6 @@ export function StatsPanel({ children }: Readonly<{ children: ReactNode }>) {
       <TogetherDaysCard />
       <TripCountdownCard />
       <AlbumProgressCard />
-      <CoupleLogo />
     </aside>
   );
 }

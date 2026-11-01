@@ -111,6 +111,10 @@ export const hasSiteSession = (request: NextRequest) => {
 export const hasAdminSession = (request: NextRequest) => getAuthRole(request) === "admin";
 
 export const requireSiteSession = (request: NextRequest) => {
+  if (process.env.MAP_OF_US_DESKTOP === "1") {
+    return null;
+  }
+
   if (getMissingAuthEnv().length > 0) {
     return NextResponse.json({ error: "Authentication is not configured" }, { status: 503 });
   }
@@ -123,6 +127,10 @@ export const requireSiteSession = (request: NextRequest) => {
 };
 
 export const requireAdminSession = (request: NextRequest) => {
+  if (process.env.MAP_OF_US_DESKTOP === "1") {
+    return null;
+  }
+
   if (getMissingAuthEnv().length > 0) {
     return NextResponse.json({ error: "Authentication is not configured" }, { status: 503 });
   }

@@ -19,7 +19,7 @@ import {
 } from "./province/Shared";
 import CityPanel from "./province/CityPanel";
 import { LocalPrivacyImg } from "@/components/LocalPrivacyImage";
-import { isMobileStaticApp } from "@/lib/client/idb";
+import { isMobileStaticApp, isDesktopApp } from "@/lib/client/idb";
 
 
 interface ProvinceMapProps {
@@ -342,7 +342,7 @@ export default function ProvinceMap({ province, width = 1120, height = 760 }: Pr
     setLocalMemories(memories);
   };
 
-  const isEffectiveAdmin = isAdmin || isMobileStaticApp();
+  const isEffectiveAdmin = isAdmin || isMobileStaticApp() || isDesktopApp();
 
   const handleSaveMemory = async (cityId: string, memory: Memory) => {
     if (!isEffectiveAdmin) throw new Error("Admin mode required");

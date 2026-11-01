@@ -101,7 +101,7 @@ export function MemorySidebar({ active, className, onClose }: Readonly<{ active:
   const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   return (
-    <aside className={className ?? "hidden h-[100dvh] w-[240px] shrink-0 border-r border-[#D8DDD8]/78 bg-[#FAFBF7]/85 px-3.5 py-6 shadow-[10px_0_30px_rgba(90,102,112,0.035)] backdrop-blur lg:flex lg:flex-col justify-between"}>
+    <aside className={className ?? "hidden h-full max-h-screen w-[240px] shrink-0 sticky top-0 self-start border-r border-[#D8DDD8]/78 bg-[#FAFBF7]/85 px-3.5 py-6 shadow-[10px_0_30px_rgba(90,102,112,0.035)] backdrop-blur lg:flex lg:flex-col justify-between overflow-hidden"}>
       <div className="flex-1 min-h-0 flex flex-col">
         {/* Brand Header */}
         <div className="text-center pb-2 border-b border-[#D8DDD8]/40">
@@ -265,7 +265,7 @@ export function MemoryPageShell({
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   return (
-    <main className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-[#FAFBF7] text-[#5A6670]">
+    <main className="relative flex h-[100dvh] h-screen max-h-[100dvh] max-h-screen flex-col overflow-hidden bg-[#FAFBF7] text-[#5A6670]">
       <div className="map-mist-band" aria-hidden="true" />
       <span className="absolute left-[38%] top-[9%] h-2 w-2 bg-[#F5DCE0]" aria-hidden="true" />
       <span className="absolute right-[17%] top-[15%] h-2 w-2 bg-[#D6E8F0]" aria-hidden="true" />
@@ -289,7 +289,7 @@ export function MemoryPageShell({
       {/* Layout spacer for fixed mobile top header */}
       <div className="h-10 shrink-0 lg:hidden" aria-hidden="true" />
 
-      <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
+      <div className="relative z-10 flex min-h-0 flex-1 h-full overflow-hidden">
         <MemorySidebar active={active} />
         
         <AnimatePresence>
@@ -319,7 +319,7 @@ export function MemoryPageShell({
           )}
         </AnimatePresence>
 
-        <section className="min-w-0 flex-1 overflow-y-auto px-3.5 pt-4 pb-24 sm:px-10 lg:py-8">{children}</section>
+        <section className="min-w-0 flex-1 h-full max-h-full overflow-y-auto px-3.5 pt-4 pb-24 sm:px-10 lg:py-8 overscroll-contain">{children}</section>
       </div>
       <MobileBottomNav />
     </main>

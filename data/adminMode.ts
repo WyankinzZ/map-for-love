@@ -1,4 +1,4 @@
-import { isMobileStaticApp } from "@/lib/client/idb";
+import { isMobileStaticApp, isDesktopApp } from "@/lib/client/idb";
 
 export const adminModeUpdatedEvent = "mapofus:admin-mode-updated";
 export const adminModeSessionKey = "mapofus:admin-unlocked";
@@ -6,8 +6,8 @@ export const adminModeSessionKey = "mapofus:admin-unlocked";
 export const readAdminMode = () => {
   if (typeof window === "undefined") return false;
 
-  // On mobile APK / static app, the user is the private owner of their phone app
-  if (isMobileStaticApp()) return true;
+  // On mobile APK / static app or desktop client, the user is the private owner of their local app
+  if (isMobileStaticApp() || isDesktopApp()) return true;
 
   return (
     window.sessionStorage.getItem(adminModeSessionKey) === "true" ||

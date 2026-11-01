@@ -21,6 +21,7 @@
 /dist
 /out
 *.apk
+!releases/*.apk
 *.exe
 *.zip
 *.7z

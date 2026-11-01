@@ -113,3 +113,19 @@ export function isMobileStaticApp(): boolean {
 
   return false;
 }
+
+/**
+ * Detects whether the app is running in an Electron desktop environment.
+ */
+export function isDesktopApp(): boolean {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    if (userAgent.includes("electron")) return true;
+    const w = window as unknown as { process?: { type?: string } };
+    if (w.process?.type === "renderer") return true;
+  } catch {}
+
+  return false;
+}
